@@ -149,4 +149,61 @@ describe('LetterSweeper (LG-026-P3-R3/R4)', () => {
     // 合法值过
     assert.equal(store.insertLetter({ from: 'a', to: 'b', priority: '常规', payload: {}, ttlSeconds: 60 }).status, 'pending');
   });
+
+  // ── CTO 整改 2026-09-02T07:35Z：ref 件（升级产物）全规则排除 ──
+
+  it('ref urgent envelope past grace is NOT re-escalated (链式膨胀终止)', () => {
+    const original = store.insertLetter({ from: 'x', to: 'CTO', priority: '急件', payload: {} });
+    const { envelope } = store.escalateLetter(original.letterId, LEAD_AGENT_ID, {
+      from: LEAD_AGENT_ID, to: 'COS', priority: '急件', payload: {},
+    });
+    // ref 信封超急件宽限（31min 场景同构）
+    travel(envelope.letterId, 'created_at', 1);
+    const r = sweeper.sweep();
+    assert.equal(r.escalated, 0);
+    const after = store.getLetter(envelope.letterId)!;
+    assert.equal(after.status, 'pending'); // 不动：ref 件入人工终裁域
+    assert.equal(after.retries, 0);
+  });
+
+  it('ref important envelope past 8h chain is NOT re-pushed or escalated', () => {
+    const original = store.insertLetter({ from: 'x', to: 'COS', priority: '急件', payload: {} });
+    const { envelope } = store.escalateLetter(original.letterId, LEAD_AGENT_ID, {
+      from: LEAD_AGENT_ID, to: 'BOD', priority: '重要', payload: {},
+    });
+    store.transition(envelope.letterId, 'deliver', LEAD_AGENT_ID);
+    travel(envelope.letterId, 'delivered_at', 9);
+    const r = sweeper.sweep();
+    assert.equal(r.rescued, 0);
+    assert.equal(r.escalated, 0);
+    const after = store.getLetter(envelope.letterId)!;
+    assert.equal(after.status, 'delivered');
+    assert.equal(after.retries, 0);
+  });
+
+  it('ref envelope past ttl retry limit is NOT escalated (ttl 链终止)', () => {
+    const original = store.insertLetter({ from: 'x', to: 'CPO', priority: '急件', payload: {} });
+    const { envelope } = store.escalateLetter(original.letterId, LEAD_AGENT_ID, {
+      from: LEAD_AGENT_ID, to: 'COS', priority: '常规', payload: {},
+    });
+    // 给 ref 件挂 ttl 并拨到超限场景
+    store.close();
+    const raw = new DatabaseSync(TEST_DB);
+    raw.prepare('UPDATE letters SET ttl = 60, retries = 2 WHERE letter_id = ?').run(envelope.letterId);
+    raw.close();
+    store = createLetterStore(TEST_DB, { leaderId: LEAD_AGENT_ID });
+    sweeper = createLetterSweeper({
+      letterStore: store,
+      wake: () => { wakeCount++; },
+      escalateTo: 'COS',
+    }, SWEEP_OPTS);
+    travel(envelope.letterId, 'created_at', 1);
+
+    const r = sweeper.sweep();
+    assert.equal(r.expired, 0); // ref 件不进 ttl 扫描面
+    assert.equal(r.escalated, 0);
+    const after = store.getLetter(envelope.letterId)!;
+    assert.equal(after.status, 'pending');
+    assert.equal(after.retries, 2); // 未被再重推
+  });
 });

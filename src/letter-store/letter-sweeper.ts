@@ -56,6 +56,16 @@ function ageMs(iso: string | null): number {
   return Date.now() - new Date(iso).getTime();
 }
 
+/**
+ * 扫描面查询统一入口（CTO 整改 2026-09-02T07:35Z）：全部规则排除
+ * refLetterId 非空件——升级产物入人工终裁域（spec §8.6 终裁权 COS），
+ * 自动链单层终止；ref 件触达走 L1/L2+上线即报既有通道；重推对 ref 件
+ * 语义混乱（wake 组长无意义）一并排除。一处收口防各分支漏排。
+ */
+function listSweepable(store: LetterStore, filter: Parameters<LetterStore['listLetters']>[0]): LetterRecord[] {
+  return store.listLetters(filter).filter((l) => !l.refLetterId);
+}
+
 export function createLetterSweeper(deps: LetterSweeperDeps, opts: LetterSweeperOptions = {}) {
   const intervalMs = opts.intervalMs ?? DEFAULT_INTERVAL_MS;
   const cSuiteHours = opts.cSuiteHours ?? DEFAULT_C_SUITE_HOURS;
@@ -105,7 +115,7 @@ export function createLetterSweeper(deps: LetterSweeperDeps, opts: LetterSweeper
     let expired = 0;
 
     // R3 重要件：delivered 未 read 超阈值 → 重推一次 → 再超时 escalate
-    const delivered = deps.letterStore.listLetters({ status: 'delivered', priority: '重要' });
+    const delivered = listSweepable(deps.letterStore, { status: 'delivered', priority: '重要' });
     for (const letter of delivered) {
       const thresholdMs = (isCSuite(letter.to) ? cSuiteHours : executionHours) * 3_600_000;
       const waited = ageMs(letter.deliveredAt);
@@ -119,7 +129,7 @@ export function createLetterSweeper(deps: LetterSweeperDeps, opts: LetterSweeper
     }
 
     // R3 急件：零等待即时升（宽限 graceMs 后仍 pending/delivered）
-    const urgent = deps.letterStore.listLetters({ priority: '急件' });
+    const urgent = listSweepable(deps.letterStore, { priority: '急件' });
     for (const letter of urgent) {
       if (letter.status !== 'pending' && letter.status !== 'delivered') continue;
       if (ageMs(letter.createdAt) < urgentGraceMs) continue;
@@ -127,7 +137,7 @@ export function createLetterSweeper(deps: LetterSweeperDeps, opts: LetterSweeper
     }
 
     // R4 ttl 到期未投件：重推留痕 → 重试超限 escalate
-    const pending = deps.letterStore.listLetters({ status: 'pending' });
+    const pending = listSweepable(deps.letterStore, { status: 'pending' });
     for (const letter of pending) {
       if (letter.ttlSeconds === null) continue;
       if (ageMs(letter.createdAt) < letter.ttlSeconds * 1000) continue;
