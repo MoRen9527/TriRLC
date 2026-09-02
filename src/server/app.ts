@@ -4745,6 +4745,10 @@ export function createTriLCApp(env: TriLCEnv) {
           agentId: LEAD_AGENT_ID,
           intervalMs: 24 * 60 * 60 * 1000, // eventDriven 不参与调度，仅占位
           eventDriven: true,
+          // CTO triage 裁决（2026-09-02T07:43Z）B 案 env 化半案：组长模型名可
+          // env 覆盖（TRILC_LEAD_MODEL），缺省不变零破坏；候选存活名以实证
+          // probe（completion 真出 token）为准
+          model: process.env.TRILC_LEAD_MODEL ?? 'tmv-deepseek-v4-flash',
           maxTurns: 6,
           systemPrompt: [
             `你是 TriLC 业务组长「${LEAD_AGENT_ID}」（LG-026 注册制组长，事件驱动唤醒，单次唤醒办完即眠）。`,
