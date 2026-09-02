@@ -34,6 +34,13 @@ export interface HeartbeatAgentConfig {
   userMessage?: string;
   /** Working directory for tool execution (REQ-014b: per-agent cwd). */
   cwd?: string;
+  /**
+   * Event-driven agent (LG-026 组长): no interval timer is armed; the agent
+   * runs only when runner.requestHeartbeatNow() fires (e.g. 信箱入件即醒).
+   * intervalMs is still required by the config shape but is unused for
+   * scheduling (nextRunAt bookkeeping only).
+   */
+  eventDriven?: boolean;
 }
 
 interface AgentRuntimeState extends HeartbeatAgentConfig {
@@ -48,6 +55,12 @@ export interface TriLCHeartbeatRunner {
   start(): void;
   /** Stop the scheduling loop and clear all timers. */
   stop(): void;
+  /**
+   * On-demand wake (LG-026 唤醒链)：fires the wake handler in-process
+   * (250ms coalescing by default). Event-driven agents (组长) run on this
+   * path regardless of their nextRunAt bookkeeping.
+   */
+  requestHeartbeatNow(opts?: { reason?: string; coalesceMs?: number }): void;
   /**
    * Hot-reload agent configs. Preserves nextRunAt for agents that remain
    * in the new config set; new agents get scheduled immediately.
@@ -97,6 +110,8 @@ export function createHeartbeatRunner(opts: {
     let earliest: number | null = null;
     for (const [, agent] of agents) {
       if (agent.running) continue;
+      // LG-026: event-driven agents (组长) have no interval timer — wake-only
+      if (agent.eventDriven) continue;
       if (earliest === null || agent.nextRunAt < earliest) {
         earliest = agent.nextRunAt;
       }
@@ -121,8 +136,9 @@ export function createHeartbeatRunner(opts: {
     for (const [id, agent] of agents) {
       // requests-in-flight skip: if the agent is already running, skip
       if (agent.running) continue;
-      // Not yet due: skip
-      if (agent.nextRunAt > now) continue;
+      // Event-driven agents (组长) run on every wake regardless of nextRunAt
+      // (LG-026 来件即醒); interval agents still respect their schedule.
+      if (!agent.eventDriven && agent.nextRunAt > now) continue;
 
       agent.running = true;
 
@@ -161,6 +177,10 @@ export function createHeartbeatRunner(opts: {
   return {
     get isRunning(): boolean {
       return started;
+    },
+
+    requestHeartbeatNow(opts?: { reason?: string; coalesceMs?: number }): void {
+      wake.requestHeartbeatNow(opts);
     },
 
     start(): void {

@@ -11,8 +11,9 @@ export type LetterStatus = 'pending' | 'delivered' | 'read' | 'escalated' | 'don
 
 export type LetterAction = 'deliver' | 'read' | 'escalate' | 'done';
 
-// 台账 action 超集：寄信本身留痕 'send'（轨迹自寄信起）
-export type LedgerAction = LetterAction | 'send';
+// 台账 action 超集：寄信本身留痕 'send'（轨迹自寄信起）；
+// 'escalate_denied' = 端点层 ACL 拒绝的升级尝试留痕（B2，store 层状态机不感知）
+export type LedgerAction = LetterAction | 'send' | 'escalate_denied';
 
 export interface LetterEnvelope {
   letterId?: string; // 缺省由 store 生成（LT-<UTC日期>-<8hex>）

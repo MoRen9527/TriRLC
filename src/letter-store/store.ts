@@ -81,6 +81,14 @@ const TRANSITIONS: Record<LetterAction, { from: LetterStatus[]; to: LetterStatus
 
 const PRIORITIES: LetterPriority[] = ['常规', '重要', '急件'];
 
+// ── 组长身份常量（单一来源，CTO 批 B 提醒②）──
+// heartbeat-runner 组长注册（agentId）与 state 端点 escalate ACL 白名单同引此处，
+// 防两处字符串漂移。改名需求出现时只动本文件。
+export const LEAD_AGENT_ID = '组长';
+
+// escalate 端点层 ACL：升级执行者白名单（组长形式复核可升 + COS 终裁权，design §二④）
+export const ESCALATE_ACTOR_ALLOWLIST: readonly string[] = [LEAD_AGENT_ID, 'COS'];
+
 export interface LetterStoreOptions {
   // 组长身份标识：deliver 动作唯一合法 actor（P2 组长 agent 接线时传注册名）
   leaderId?: string;
@@ -340,6 +348,24 @@ export function createLetterStore(dbPath: string, opts?: LetterStoreOptions) {
 
   // ── Ledger ──
 
+  /**
+   * 台账补写原语（B2）：端点层 ACL 拒绝升级尝试时留痕（action='escalate_denied'）。
+   * store 层状态机不感知 ACL——分层不破：门禁在端点，轨迹在台账。
+   * 目标信件不存在时抛 not_found（拒绝留痕不造孤儿行）。
+   */
+  function appendLedger(entry: { letterId: string; actor: string; action: LedgerAction }): LedgerEntry {
+    if (!getLetterStmt.get(entry.letterId)) throw new Error(`not_found: ${entry.letterId}`);
+    const result = insertLedgerStmt.run(entry.letterId, entry.actor, entry.action);
+    const row = db.prepare('SELECT * FROM ledger WHERE id = ?').get(Number(result.lastInsertRowid)) as Record<string, unknown>;
+    return {
+      id: Number(row.id),
+      letterId: row.letter_id as string,
+      actor: row.actor as string,
+      action: row.action as LedgerAction,
+      at: row.at as string,
+    };
+  }
+
   function listLedger(filter?: LedgerQueryFilter): LedgerEntry[] {
     let sql = 'SELECT * FROM ledger WHERE 1=1';
     const params: unknown[] = [];
@@ -378,6 +404,7 @@ export function createLetterStore(dbPath: string, opts?: LetterStoreOptions) {
     recordRetry,
     listLetters,
     getLastSeq,
+    appendLedger,
     listLedger,
     close,
   };

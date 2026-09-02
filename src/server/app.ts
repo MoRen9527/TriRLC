@@ -32,6 +32,9 @@ import { agentEventsToAnthropicSSE, formatSSELine } from './anthropic-stream.js'
 import { agentEventsToOpenAISSE, formatOpenAISSE, OPENAI_SSE_DONE } from './openai-stream.js';
 import { registerShellExecTool, getDefaultSupervisor, cancelAllShellProcesses } from '../tools/shell-exec.js';
 import { createSessionStore } from '../session-store/index.js';
+import { createLetterStore, LEAD_AGENT_ID, ESCALATE_ACTOR_ALLOWLIST } from '../letter-store/store.js';
+import type { LetterAction, LetterPriority } from '../letter-store/types.js';
+import { registerLeadTools } from '../letter-store/lead-tools.js';
 import { runSafetyCheck } from '../session-store/safety-check.js';
 import type { SessionRecord, SessionMessageRecord, SessionStatus } from '../session-store/types.js';
 import {
@@ -1268,6 +1271,9 @@ export function createTriLCApp(env: TriLCEnv) {
     dbPath: `${env.dataDir}/event-queue.db`,
   });
   const sessionStore = createSessionStore(`${env.dataDir}/sessions.db`);
+  // ── LG-026 信件 DB（P2-B1：端点挂通用面双实例可用，P4 互备基座）──
+  // leaderId 与组长 agentId 同源 LEAD_AGENT_ID（单一来源常量，防两处漂移）。
+  const letterStore = createLetterStore(`${env.dataDir}/letters.db`, { leaderId: LEAD_AGENT_ID });
 
   // ── Init Chain（链路进度状态机；与公司态 CompanyInitState 分离独立持久）──
   // 事件经 publish 同通道发布（init:chain-changed / init:selfcheck-* / init:step-event 族）。
@@ -4155,6 +4161,174 @@ export function createTriLCApp(env: TriLCEnv) {
           return;
         }
 
+        // ── LG-026 信件端点五件（P2-B1/B2；全在全局门后：Host/Origin + X-Internal-Token 已校验）──
+        // 通用面双实例可用（P4 互备基座）；wake/组长注册仅通道 profile 生效（B3）。
+
+        // POST /internal/v1/letters — 寄信 → { letter_id, seq_no }
+        // payload 写入半校验（O2 双保险）：必须为可 JSON 序列化的非空结构。
+        if (req.url === '/internal/v1/letters' && req.method === 'POST') {
+          const chunks: Buffer[] = [];
+          for await (const chunk of req) chunks.push(chunk);
+          let body: Record<string, unknown>;
+          try {
+            body = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
+          } catch {
+            res.writeHead(400, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: 'invalid_json' }));
+            return;
+          }
+          const from = body.from;
+          const to = body.to;
+          const priority = body.priority ?? '常规';
+          if (typeof from !== 'string' || !from.trim() || typeof to !== 'string' || !to.trim()) {
+            res.writeHead(400, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: 'invalid_envelope', message: 'from/to must be non-empty strings' }));
+            return;
+          }
+          const pri = priority as LetterPriority;
+          if (!['常规', '重要', '急件'].includes(pri)) {
+            res.writeHead(400, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: 'invalid_priority', message: 'priority must be 常规|重要|急件' }));
+            return;
+          }
+          let payloadForStore: unknown = body.payload ?? null;
+          try {
+            payloadForStore = JSON.parse(JSON.stringify(payloadForStore ?? null));
+          } catch {
+            res.writeHead(400, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: 'invalid_payload', message: 'payload must be JSON-serializable' }));
+            return;
+          }
+          try {
+            const rec = letterStore.insertLetter({
+              from,
+              to,
+              priority: pri,
+              payload: payloadForStore,
+              ttlSeconds: typeof body.ttl === 'number' ? body.ttl : null,
+              letterId: typeof body.letter_id === 'string' && body.letter_id ? body.letter_id : undefined,
+            });
+            // B4 唤醒链：入件即醒（同进程 wake；通道态组长 eventDriven 即办，无组长时空转无害）
+            heartbeatRunner.requestHeartbeatNow({ reason: 'action' });
+            res.writeHead(201, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, letter_id: rec.letterId, seq_no: rec.seqNo }));
+          } catch (err) {
+            const msg = (err as Error).message;
+            const status = msg.startsWith('duplicate_id') ? 409 : 400;
+            res.writeHead(status, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: 'letter_rejected', message: msg }));
+          }
+          return;
+        }
+
+        // GET /internal/v1/letters?box=&to=&status=&since_seq=&limit= — 收信/积压重放
+        if (req.url?.startsWith('/internal/v1/letters') && req.method === 'GET') {
+          const urlObj = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
+          const box = urlObj.searchParams.get('box');
+          const to = urlObj.searchParams.get('to') ?? undefined;
+          const from = urlObj.searchParams.get('from') ?? undefined;
+          const status = urlObj.searchParams.get('status') ?? undefined;
+          const sinceSeqRaw = urlObj.searchParams.get('since_seq');
+          const limitRaw = urlObj.searchParams.get('limit');
+          if (box === 'in' && !to) {
+            res.writeHead(400, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: 'box_in_requires_to' }));
+            return;
+          }
+          if (box === 'out' && !from) {
+            res.writeHead(400, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: 'box_out_requires_from' }));
+            return;
+          }
+          const letters = letterStore.listLetters({
+            to,
+            from,
+            status: status as never,
+            sinceSeq: sinceSeqRaw !== null ? Number(sinceSeqRaw) : undefined,
+            limit: limitRaw !== null ? Number(limitRaw) : undefined,
+          });
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, letters, count: letters.length }));
+          return;
+        }
+
+        // POST /internal/v1/letters/wake — 组长唤醒触发（127.0.0.1 本地语义，
+        // listener 只绑 127.0.0.1 + 全局门已过；内部转 requestHeartbeatNow action）
+        if (req.url === '/internal/v1/letters/wake' && req.method === 'POST') {
+          heartbeatRunner.requestHeartbeatNow({ reason: 'action' });
+          res.writeHead(202, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, woken: true, reason: 'action' }));
+          return;
+        }
+
+        // POST /internal/v1/letters/{id}/state — 状态流转 { action, actor }
+        // B2：escalate 走端点层 ACL（组长注册名 + COS 白名单）；拒绝亦写台账留痕。
+        // 其余 action 照 store 门禁（store 层不做 actor 白名单只留痕，分层不破）。
+        {
+          const stateMatch = req.url?.match(/^\/internal\/v1\/letters\/([^/]+)\/state$/);
+          if (stateMatch && req.method === 'POST') {
+            const letterId = decodeURIComponent(stateMatch[1]!);
+            const chunks: Buffer[] = [];
+            for await (const chunk of req) chunks.push(chunk);
+            let body: Record<string, unknown>;
+            try {
+              body = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
+            } catch {
+              res.writeHead(400, { 'content-type': 'application/json' });
+              res.end(JSON.stringify({ error: 'invalid_json' }));
+              return;
+            }
+            const action = body.action;
+            const actor = body.actor;
+            if (typeof action !== 'string' || !['deliver', 'read', 'escalate', 'done'].includes(action)) {
+              res.writeHead(400, { 'content-type': 'application/json' });
+              res.end(JSON.stringify({ error: 'invalid_action', message: 'action must be deliver|read|escalate|done' }));
+              return;
+            }
+            if (typeof actor !== 'string' || !actor.trim()) {
+              res.writeHead(400, { 'content-type': 'application/json' });
+              res.end(JSON.stringify({ error: 'invalid_actor', message: 'actor must be a non-empty string' }));
+              return;
+            }
+            if (action === 'escalate' && !ESCALATE_ACTOR_ALLOWLIST.includes(actor)) {
+              letterStore.appendLedger({ letterId, actor, action: 'escalate_denied' });
+              res.writeHead(403, { 'content-type': 'application/json' });
+              res.end(JSON.stringify({ error: 'escalate_actor_forbidden', message: `escalate actor must be one of: ${ESCALATE_ACTOR_ALLOWLIST.join(', ')}` }));
+              return;
+            }
+            try {
+              const rec = letterStore.transition(letterId, action as LetterAction, actor);
+              res.writeHead(200, { 'content-type': 'application/json' });
+              res.end(JSON.stringify({ ok: true, letter: rec }));
+            } catch (err) {
+              const msg = (err as Error).message;
+              const status = msg.startsWith('not_found') ? 404
+                : msg.startsWith('actor_forbidden') ? 403
+                : msg.startsWith('illegal_transition') ? 409
+                : 400;
+              res.writeHead(status, { 'content-type': 'application/json' });
+              res.end(JSON.stringify({ error: 'transition_rejected', message: msg }));
+            }
+            return;
+          }
+        }
+
+        // GET /internal/v1/ledger?letter_id=&since=&limit= — 台账读（组长工具白名单同源面）
+        if (req.url?.startsWith('/internal/v1/ledger') && req.method === 'GET') {
+          const urlObj = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
+          const letterId = urlObj.searchParams.get('letter_id') ?? undefined;
+          const sinceRaw = urlObj.searchParams.get('since');
+          const limitRaw = urlObj.searchParams.get('limit');
+          const entries = letterStore.listLedger({
+            letterId,
+            sinceId: sinceRaw !== null ? Number(sinceRaw) : undefined,
+            limit: limitRaw !== null ? Number(limitRaw) : undefined,
+          });
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, entries, count: entries.length }));
+          return;
+        }
+
         // ── POST /shutdown ──
         // Graceful shutdown endpoint for Windows-compatible daemon stop.
         // On Windows, SIGTERM is a hard kill; this provides a clean alternative.
@@ -4393,6 +4567,36 @@ export function createTriLCApp(env: TriLCEnv) {
       // 路径）。结构化流程 = role-catalog / assemble / onboarding endpoints。
       const agents: HeartbeatAgentConfig[] = [DEFAULT_HEARTBEAT_AGENT];
 
+      // ── LG-026-P2-B3：组长注册（仅通道 profile 生效）──
+      // spec §8.6：注册制组长 in-process agent 资格（白名单式单 agent）。
+      // 事件驱动唤醒（eventDriven：无 interval 定时，信箱入件 requestHeartbeatNow
+      // 即醒）；定时检查推送/提醒职责归 cron 面承载（既有立法），不入 runner interval。
+      // 工具白名单 = letter_* 五件（minTier:'heartbeat' 清单级不可见于 main 以下 tier，
+      // 无 shell 无仓写）；cwd 钉通道实例 DATA_DIR；agentId 与 LetterStore leaderId
+      // 同源 LEAD_AGENT_ID 单一来源常量。
+      if (process.env.TRILC_CHANNEL_MODE === '1') {
+        registerLeadTools(letterStore);
+        agents.push({
+          agentId: LEAD_AGENT_ID,
+          intervalMs: 24 * 60 * 60 * 1000, // eventDriven 不参与调度，仅占位
+          eventDriven: true,
+          maxTurns: 6,
+          systemPrompt: [
+            `你是 TriLC 业务组长「${LEAD_AGENT_ID}」（LG-026 注册制组长，事件驱动唤醒，单次唤醒办完即眠）。`,
+            '职责：①查收待投信件（letter_list_pending）并逐封投递（letter_deliver）；',
+            '②重要件/急件超时未读时按公开标准形式复核，复核通过则升级（letter_escalate，升级链固定 组长→COS→BOD，终裁升级权在 COS）；',
+            '③需要回信或通报时以组长名义寄信（send_letter）；④办理过程的关键动作查台账（ledger_read）核对留痕。',
+            '业务规则锚：LG-026 设计方案书 §二③④ + trimlc-channel-daemon-spec §8.6。',
+            '状态机：待投→已投（你唯一执行）→已读（收件人唯一定读权，你不得代标）；升级=旁路冻结原信+新信封引用原信。',
+            '优先级三档：常规（工作窗）/重要（上线即报+定时重推）/急件（即时升级链）。',
+            '约束：只办理信箱事务，不触代码仓，不做信件内容质量判断（内容责任在发件人）。',
+          ].join('\n'),
+          userMessage: '唤醒：查收待投信件并办理（投递/按需升级/回信），完成后简报办理结果。',
+          cwd: env.dataDir, // 通道实例 DATA_DIR（%LOCALAPPDATA%/trilc-channel/）
+        });
+        console.log(`[trilc] lead agent registered (channel mode): ${LEAD_AGENT_ID}`);
+      }
+
       heartbeatRunner.updateAgents(agents);
       heartbeatRunner.start();
       publish({ type: "heartbeat:sent", nodeId: env.nodeId });
@@ -4453,6 +4657,7 @@ export function createTriLCApp(env: TriLCEnv) {
       connMgr.stopHealthCheckLoop();
       stopKeyCache();
       cancelAllShellProcesses();
+      try { letterStore.close(); } catch { /* best-effort */ }
       // FADE-ASSESS-003: 关闭 contract-resolver 文件监听（knowledge watch 增量），
       // 否则 fs.watch 句柄会拖住事件循环（测试/退出流程挂起）
       try {

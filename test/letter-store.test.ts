@@ -425,4 +425,20 @@ describe('LetterStore batch-A amendments', () => {
     assert.equal(bad.payload, 'not-json');
     assert.equal(bad.lastError, 'SSE offline'); // 保留投递错误原值，不覆写
   });
+
+  it('appendLedger writes audit rows for ACL denials (B2 留痕原语)', () => {
+    const rec = store.insertLetter(envelope());
+    const entry = store.appendLedger({ letterId: rec.letterId, actor: '路人', action: 'escalate_denied' });
+    assert.equal(entry.action, 'escalate_denied');
+    assert.equal(entry.actor, '路人');
+    assert.match(entry.at, /Z$/);
+    // 一信多行：send + escalate_denied
+    const trail = store.listLedger({ letterId: rec.letterId });
+    assert.equal(trail.length, 2);
+    // 目标信件不存在 → not_found（拒绝留痕不造孤儿行）
+    assert.throws(
+      () => store.appendLedger({ letterId: 'LT-none', actor: 'x', action: 'escalate_denied' }),
+      /not_found/,
+    );
+  });
 });
