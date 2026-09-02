@@ -4296,6 +4296,38 @@ export function createTriLCApp(env: TriLCEnv) {
               res.end(JSON.stringify({ error: 'escalate_actor_forbidden', message: `escalate actor must be one of: ${ESCALATE_ACTOR_ALLOWLIST.join(', ')}` }));
               return;
             }
+            // CTO 终验裁示（2026-09-02T05:32Z 债务③）：escalate 强制原子版——
+            // 端点与组长工具归一走 escalateLetter（冻结原信+建 ref 新信封单事务），
+            // 消「升级无新信封」轨迹断链的双入口分叉；envelope 必填（缺省 from=actor，
+            // priority 缺省 '急件'=升级链语义）。
+            if (action === 'escalate') {
+              const envBody = body.envelope as Record<string, unknown> | undefined;
+              const envTo = envBody?.to;
+              if (!envBody || typeof envTo !== 'string' || !envTo.trim()) {
+                res.writeHead(400, { 'content-type': 'application/json' });
+                res.end(JSON.stringify({ error: 'invalid_envelope', message: 'escalate requires envelope.to (new ref envelope recipient)' }));
+                return;
+              }
+              try {
+                const result = letterStore.escalateLetter(letterId, actor, {
+                  from: typeof envBody.from === 'string' && envBody.from ? envBody.from : actor,
+                  to: envTo,
+                  priority: envBody.priority === '常规' || envBody.priority === '重要' ? envBody.priority : '急件',
+                  payload: envBody.payload ?? { escalatedBy: actor },
+                  ttlSeconds: typeof envBody.ttl === 'number' ? envBody.ttl : null,
+                });
+                res.writeHead(200, { 'content-type': 'application/json' });
+                res.end(JSON.stringify({ ok: true, original: result.original, envelope: result.envelope }));
+              } catch (err) {
+                const msg = (err as Error).message;
+                const status = msg.startsWith('not_found') ? 404
+                  : msg.startsWith('illegal_transition') ? 409
+                  : 400;
+                res.writeHead(status, { 'content-type': 'application/json' });
+                res.end(JSON.stringify({ error: 'escalate_rejected', message: msg }));
+              }
+              return;
+            }
             try {
               const rec = letterStore.transition(letterId, action as LetterAction, actor);
               res.writeHead(200, { 'content-type': 'application/json' });

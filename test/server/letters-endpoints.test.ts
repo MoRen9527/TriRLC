@@ -177,11 +177,50 @@ describe('letters endpoints (LG-026-P2-B1/B2)', () => {
     assert.ok(trail.json.entries.some((e: any) => e.action === 'escalate_denied' && e.actor === 'gina'));
     const letter = await req('GET', `/internal/v1/letters?box=in&to=hank`);
     assert.equal(letter.json.letters[0]!.status, 'pending');
+  });
 
-    // 白名单内：COS 终裁升级 → 200，原信 escalated
-    const esc = await req('POST', `/internal/v1/letters/${id}/state`, { action: 'escalate', actor: 'COS' });
+  it('escalate requires envelope.to (原子版强制，缺失 400)', async () => {
+    const made = await req('POST', '/internal/v1/letters', {
+      from: 'ivy', to: 'jack', priority: '重要', payload: {},
+    });
+    const id = made.json.letter_id;
+    // 白名单内但缺 envelope → 400
+    const noEnv = await req('POST', `/internal/v1/letters/${id}/state`, { action: 'escalate', actor: 'COS' });
+    assert.equal(noEnv.status, 400);
+    assert.equal(noEnv.json.error, 'invalid_envelope');
+    // 信件未被冻结（400 前置校验不触库）
+    const letter = await req('GET', `/internal/v1/letters?box=in&to=jack`);
+    assert.equal(letter.json.letters[0]!.status, 'pending');
+  });
+
+  it('escalate atomic path: freeze original + create ref envelope in one call (CTO 终验裁示③)', async () => {
+    const made = await req('POST', '/internal/v1/letters', {
+      from: 'kate', to: 'leo', priority: '急件', payload: { q: 9 },
+    });
+    const id = made.json.letter_id;
+
+    // 白名单内 + envelope 完整 → 200 {original, envelope}
+    const esc = await req('POST', `/internal/v1/letters/${id}/state`, {
+      action: 'escalate',
+      actor: 'COS',
+      envelope: { to: 'BOD', payload: { reason: 'COS 终裁升级' } },
+    });
     assert.equal(esc.status, 200);
-    assert.equal(esc.json.letter.status, 'escalated');
+    assert.equal(esc.json.original.status, 'escalated');
+    assert.equal(esc.json.envelope.refLetterId, id);
+    assert.equal(esc.json.envelope.to, 'BOD');
+    assert.equal(esc.json.envelope.from, 'COS'); // 缺省 from=actor
+    assert.equal(esc.json.envelope.priority, '急件'); // 缺省升级链语义
+
+    // 原信冻结：后续 deliver 拒（409 非法流转）
+    assert.equal((await req('POST', `/internal/v1/letters/${id}/state`, { action: 'deliver', actor: '组长' })).status, 409);
+
+    // 台账：原信含 send + escalate 两行，新信封含 send 行
+    const trail = await req('GET', `/internal/v1/ledger?letter_id=${id}`);
+    assert.deepEqual(
+      trail.json.entries.map((e: any) => e.action),
+      ['send', 'escalate'],
+    );
   });
 
   it('GET /internal/v1/ledger returns full trail with since filter', async () => {
