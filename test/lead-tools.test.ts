@@ -123,4 +123,32 @@ describe('LeadTools (LG-026-P2-B3)', () => {
     assert.ok(ESCALATE_ACTOR_ALLOWLIST.includes(LEAD_AGENT_ID));
     assert.ok(ESCALATE_ACTOR_ALLOWLIST.includes('COS'));
   });
+
+  // ── CTO P2 第五型整改裁 a 案（2026-09-02）：执行面 ALLOW 规则语义 ──
+
+  it('ALLOW rules five-piece: engine grants letter_* under default mode (执行面放行)', async () => {
+    const { PermissionEngine } = await import('@tricompany/agent-core');
+    const rules = [
+      'letter_list_pending',
+      'letter_deliver',
+      'letter_escalate',
+      'send_letter',
+      'ledger_read',
+    ].map((toolName) => ({ toolName, behavior: 'allow' as const, source: 'session' as const }));
+    const engine = new PermissionEngine({ mode: 'default', rules, cwd: process.cwd() });
+    for (const tool of rules.map((r) => r.toolName)) {
+      assert.equal(engine.decide(tool, {}).allowed, true, `${tool} should be allowed`);
+    }
+    // 非白名单工具不被此规则面放行（default-deny 不变）
+    assert.equal(engine.decide('shell_exec', {}).allowed, false);
+    assert.equal(engine.decide('write_file', {}).allowed, false);
+  });
+
+  it('no rules: default engine denies letter_* (复现 ST 第三轮拦截观测)', async () => {
+    const { PermissionEngine } = await import('@tricompany/agent-core');
+    const engine = new PermissionEngine({ mode: 'default', rules: [], cwd: process.cwd() });
+    for (const tool of ['letter_list_pending', 'ledger_read', 'send_letter']) {
+      assert.equal(engine.decide(tool, {}).allowed, false, `${tool} denied without rules (default-deny)`);
+    }
+  });
 });

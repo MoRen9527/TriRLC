@@ -17,6 +17,7 @@ import {
   type HeartbeatRunResult,
 } from "./heartbeat-wake.js";
 import { runHeartbeatAgent } from "./agent-runner.js";
+import type { PermissionRule } from "@tricompany/agent-core";
 import type { SessionRecord } from "../session-store/types.js";
 
 export interface HeartbeatAgentConfig {
@@ -41,6 +42,13 @@ export interface HeartbeatAgentConfig {
    * scheduling (nextRunAt bookkeeping only).
    */
   eventDriven?: boolean;
+  /**
+   * Permission rules passed through to the agent loop's PermissionEngine
+   * (LG-026-P2 第五型整改，CTO 裁 a 案 2026-09-02): 清单面 minTier 隔离之外
+   * 的执行面放行——「清单可见≠执行放行」，组长 letter_* 工具须显式 ALLOW，
+   * 否则 default 模式 fail-closed 拦截。
+   */
+  permissionRules?: PermissionRule[];
 }
 
 interface AgentRuntimeState extends HeartbeatAgentConfig {
@@ -154,6 +162,7 @@ export function createHeartbeatRunner(opts: {
           maxTurns: agent.maxTurns,
           systemPrompt: agent.systemPrompt,
           userMessage: agent.userMessage,
+          permissionRules: agent.permissionRules,
         });
         results.push(result);
       } catch {

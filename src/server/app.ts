@@ -4741,6 +4741,16 @@ export function createTriLCApp(env: TriLCEnv) {
       // 同源 LEAD_AGENT_ID 单一来源常量。
       if (process.env.TRILC_CHANNEL_MODE === '1') {
         registerLeadTools(letterStore);
+        // CTO P2 第五型整改裁 a 案（2026-09-02）：执行面 ALLOW 规则五件随注册
+        // 注入（per-agent，非进程级 env——主会话不获得 letter_* 放行，不扩攻击
+        // 面）；清单面 minTier:'heartbeat' 隔离 + 执行面 ALLOW = 双层纵深。
+        const LEAD_TOOL_ALLOW_RULES: PermissionRule[] = [
+          'letter_list_pending',
+          'letter_deliver',
+          'letter_escalate',
+          'send_letter',
+          'ledger_read',
+        ].map((toolName) => ({ toolName, behavior: 'allow' as const, source: 'session' as const }));
         agents.push({
           agentId: LEAD_AGENT_ID,
           intervalMs: 24 * 60 * 60 * 1000, // eventDriven 不参与调度，仅占位
@@ -4750,6 +4760,7 @@ export function createTriLCApp(env: TriLCEnv) {
           // probe（completion 真出 token）为准
           model: process.env.TRILC_LEAD_MODEL ?? 'tmv-deepseek-v4-flash',
           maxTurns: 6,
+          permissionRules: LEAD_TOOL_ALLOW_RULES,
           systemPrompt: [
             `你是 TriLC 业务组长「${LEAD_AGENT_ID}」（LG-026 注册制组长，事件驱动唤醒，单次唤醒办完即眠）。`,
             '职责：①查收待投信件（letter_list_pending）并逐封投递（letter_deliver）；',

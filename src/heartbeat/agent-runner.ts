@@ -6,6 +6,7 @@
 // cycle and persists the result to session-store for recovery and audit.
 
 import { agentLoop } from "@tricompany/agent-core";
+import type { PermissionRule } from "@tricompany/agent-core";
 import type { HeartbeatRunResult } from "./heartbeat-wake.js";
 import type { SessionRecord } from "../session-store/types.js";
 import { injectKnowledgeContext, type KnowledgeInjectionResult } from "../knowledge-injector/inject.js";
@@ -61,6 +62,8 @@ export interface RunHeartbeatAgentOpts {
   maxTurns?: number;
   systemPrompt?: string;
   userMessage?: string;
+  /** Per-agent permission rules → agentLoop PermissionEngine（LG-026 组长执行面放行）。 */
+  permissionRules?: PermissionRule[];
 }
 
 export async function runHeartbeatAgent(
@@ -74,6 +77,7 @@ export async function runHeartbeatAgent(
     maxTurns = 10,
     systemPrompt,
     userMessage,
+    permissionRules,
   } = opts;
 
   const startTime = Date.now();
@@ -119,6 +123,9 @@ export async function runHeartbeatAgent(
       // REQ-20260805-006: 'heartbeat' tier = read + write allowed, no shell.
       tier: "heartbeat",
       cwd,
+      // LG-026-P2 第五型整改（CTO 裁 a 案 2026-09-02）：per-agent 执行面规则
+      // 注入——default 模式 fail-closed，组长 letter_* 须显式 ALLOW 方可执行
+      ...(permissionRules && permissionRules.length > 0 ? { permissionRules } : {}),
     })) {
       if (event.type === "content_delta") {
         content += event.delta;
