@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS letters (
   read_at TEXT,
   escalated_at TEXT,
   payload TEXT NOT NULL,
-  ttl INTEGER,
+  ttl INTEGER CHECK (ttl IS NULL OR ttl > 0),
   retries INTEGER NOT NULL DEFAULT 0,
   last_error TEXT,
   ref_letter_id TEXT REFERENCES letters(letter_id)
@@ -187,6 +187,11 @@ export function createLetterStore(dbPath: string, opts?: LetterStoreOptions) {
   function doInsertLetter(env: LetterEnvelope): LetterRecord {
     if (env.priority !== undefined && !PRIORITIES.includes(env.priority)) {
       throw new Error(`invalid_priority: ${String(env.priority)}`);
+    }
+    // R4 ttl 语义收口（ST P1 盲区 O3）：应用层写入校验兜底（CHECK 约束对新建库生效，
+    // 存量库不改表——daemon 面入库全走本校验，双保险）
+    if (env.ttlSeconds !== undefined && env.ttlSeconds !== null && env.ttlSeconds <= 0) {
+      throw new Error(`invalid_ttl: ${String(env.ttlSeconds)} (must be null or > 0)`);
     }
     if (env.letterId) {
       const dup = getLetterStmt.get(env.letterId);
@@ -325,6 +330,10 @@ export function createLetterStore(dbPath: string, opts?: LetterStoreOptions) {
     if (filter?.status) {
       sql += ' AND status = ?';
       params.push(filter.status);
+    }
+    if (filter?.priority) {
+      sql += ' AND priority = ?';
+      params.push(filter.priority);
     }
     if (filter?.sinceSeq !== undefined) {
       sql += ' AND seq_no > ?';

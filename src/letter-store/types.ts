@@ -55,6 +55,7 @@ export interface LetterQueryFilter {
   to?: string;
   from?: string;
   status?: LetterStatus;
+  priority?: LetterPriority;
   sinceSeq?: number; // 积压重放：seq_no > sinceSeq
   limit?: number;
 }

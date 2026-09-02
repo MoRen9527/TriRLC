@@ -1,9 +1,9 @@
-// ── LG-026-P2-B1/B2 信件端点五件端到端 ──
+// ── LG-026-P2-B1/B2 + P3-R1/R2/F1/F2/F4 信件端点端到端 ──
 // 配方对齐 test/server/tasks-submit-weekly-hint.test.ts 既有先例：
 // 临时数据目录 + port 0 + trimodelApiUrl 死端口 + TRILC_INTERNAL_TOKEN 注入。
-// 覆盖：寄信 201 / 校验矩阵 400/409 / 收信 box+since_seq 重放 / 状态流转门禁
-// 403/404/409 / B2 escalate 端点层 ACL（白名单外 403+台账留痕，白名单内过）/
-// 台账读 / wake 202 / 全局门 token fail-closed 覆盖信件面。
+// 覆盖：寄信 201（actor 契约+from 强制覆盖 F1+驼峰 F4）/ 校验矩阵 / 收信 box+
+// since_seq / 状态流转门禁 / B2 escalate 原子 ACL（envelope.from 必填=actor F1、
+// priority 非法 400 F2）/ 台账读 / wake 202 / R1 SSE 直推+上线即报补拉。
 // 非通道态实例（无组长注册）：wake 触发为空转，端点行为不受组长影响。
 
 import { describe, it, before, after } from 'node:test';
@@ -49,6 +49,48 @@ async function req(
   return { status: res.status, json };
 }
 
+/** 读 SSE 流的首个事件帧（event+data），限时 ms；流提前关返回 null。
+ * 读完可选发 cancel 终止会话（否则服务端 agentLoop 死端口重试拖住 server.close）。 */
+async function readFirstFrame(
+  url: string,
+  timeoutMs = 5000,
+  cancelSessionId?: string,
+): Promise<{ event: string; data: any } | null> {
+  const res = await fetch(url, {
+    headers: { 'x-internal-token': TEST_INTERNAL_TOKEN },
+  });
+  if (!res.ok || !res.body) return null;
+  const reader = res.body.getReader() as ReadableStreamDefaultReader<Uint8Array>;
+  const decoder = new TextDecoder();
+  let buf = '';
+  const timer = setTimeout(() => { try { reader.cancel(); } catch { /* ok */ } }, timeoutMs);
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return buf.includes('event:') ? parseFrame(buf) : null;
+      buf += decoder.decode(value, { stream: true });
+      const idx = buf.indexOf('\n\n');
+      if (idx >= 0) {
+        if (cancelSessionId) {
+          await req('POST', `/internal/v1/sessions/${cancelSessionId}/cancel`, {}).catch(() => { /* best-effort */ });
+        }
+        return parseFrame(buf.slice(0, idx));
+      }
+    }
+  } finally {
+    clearTimeout(timer);
+    try { reader.cancel(); } catch { /* ok */ }
+  }
+}
+
+function parseFrame(block: string): { event: string; data: any } {
+  const evLine = block.split('\n').find((l) => l.startsWith('event:'));
+  const dataLine = block.split('\n').find((l) => l.startsWith('data:'));
+  let data: any = null;
+  try { data = JSON.parse(dataLine!.slice(5).trim()); } catch { data = null; }
+  return { event: evLine!.slice(6).trim(), data };
+}
+
 before(async () => {
   tmpDataDir = mkdtempSync(join(tmpdir(), 'trilc-letters-'));
   process.env.TRILC_DATA_DIR = tmpDataDir;
@@ -85,30 +127,38 @@ after(async () => {
   }
 });
 
-describe('letters endpoints (LG-026-P2-B1/B2)', () => {
+describe('letters endpoints (LG-026-P2 + P3)', () => {
   it('rejects requests without internal token (全局门覆盖信件面)', async () => {
     const res = await fetch(`http://127.0.0.1:${appPort}/internal/v1/letters`, { method: 'POST' });
     assert.equal(res.status, 401);
   });
 
-  it('POST /internal/v1/letters delivers letter_id + seq_no (201)', async () => {
+  it('POST letters → 201 { letterId, seqNo } 驼峰契约 (F4); from forced to actor (F1)', async () => {
     const r1 = await req('POST', '/internal/v1/letters', {
-      from: 'alice', to: 'bob', priority: '常规', payload: { text: 'hello' },
+      actor: 'alice', from: 'someone-else', to: 'bob', priority: '常规', payload: { text: 'hello' },
     });
     assert.equal(r1.status, 201);
-    assert.ok(r1.json.letter_id.startsWith('LT-'));
-    assert.equal(r1.json.seq_no, 1);
+    assert.ok(r1.json.letterId.startsWith('LT-')); // 驼峰（F4）
+    assert.equal(r1.json.seqNo, 1);
+    // F1：请求体 from 伪报被覆盖为 actor
+    const got = await req('GET', `/internal/v1/letters?box=out&from=alice`);
+    assert.equal(got.json.letters[0]!.from, 'alice');
+    assert.equal(got.json.letters[0]!.letterId, r1.json.letterId);
 
     const r2 = await req('POST', '/internal/v1/letters', {
-      from: 'carol', to: 'dave', priority: '急件', payload: { text: 'urgent' },
+      actor: 'carol', to: 'dave', priority: '急件', payload: { text: 'urgent' },
     });
-    assert.equal(r2.json.seq_no, 2); // daemon 级全局单调
+    assert.equal(r2.json.seqNo, 2); // daemon 级全局单调
   });
 
-  it('validates envelope: missing fields / bad priority / bad json (400/409)', async () => {
-    assert.equal((await req('POST', '/internal/v1/letters', { to: 'x', payload: {} })).status, 400);
+  it('validates envelope: missing actor / missing to / bad priority / bad json / dup id', async () => {
+    // actor 必填（F1）
+    const noActor = await req('POST', '/internal/v1/letters', { to: 'x', payload: {} });
+    assert.equal(noActor.status, 400);
+    assert.equal(noActor.json.error, 'invalid_actor');
+    assert.equal((await req('POST', '/internal/v1/letters', { actor: 'a', payload: {} })).status, 400);
     assert.equal(
-      (await req('POST', '/internal/v1/letters', { from: 'a', to: 'b', priority: '紧急', payload: {} })).status,
+      (await req('POST', '/internal/v1/letters', { actor: 'a', to: 'b', priority: '紧急', payload: {} })).status,
       400,
     );
     const res = await fetch(`http://127.0.0.1:${appPort}/internal/v1/letters`, {
@@ -117,9 +167,8 @@ describe('letters endpoints (LG-026-P2-B1/B2)', () => {
       body: '{broken',
     });
     assert.equal(res.status, 400);
-    // duplicate explicit id → 409
-    await req('POST', '/internal/v1/letters', { from: 'a', to: 'b', payload: {}, letter_id: 'LT-dup-1' });
-    const dup = await req('POST', '/internal/v1/letters', { from: 'a', to: 'b', payload: {}, letter_id: 'LT-dup-1' });
+    await req('POST', '/internal/v1/letters', { actor: 'a', to: 'b', payload: {}, letter_id: 'LT-dup-1' });
+    const dup = await req('POST', '/internal/v1/letters', { actor: 'a', to: 'b', payload: {}, letter_id: 'LT-dup-1' });
     assert.equal(dup.status, 409);
   });
 
@@ -132,7 +181,7 @@ describe('letters endpoints (LG-026-P2-B1/B2)', () => {
     assert.ok(inbox.json.letters.every((l: any) => l.to === 'bob'));
 
     const first = inbox.json.letters[0];
-    const replay = await req('GET', `/internal/v1/letters?box=in&to=bob&since_seq=${first.seq_no}`);
+    const replay = await req('GET', `/internal/v1/letters?box=in&to=bob&since_seq=${first.seq_no ?? first.seqNo}`);
     assert.equal(replay.json.letters.length, 0); // bob 只有 seq 1 一封
 
     const pending = await req('GET', '/internal/v1/letters?status=pending&limit=1');
@@ -141,9 +190,9 @@ describe('letters endpoints (LG-026-P2-B1/B2)', () => {
 
   it('state transitions enforce store gating via HTTP (deliver/read + 403/404/409)', async () => {
     const made = await req('POST', '/internal/v1/letters', {
-      from: 'erin', to: 'frank', priority: '常规', payload: {},
+      actor: 'erin', to: 'frank', priority: '常规', payload: {},
     });
-    const id = made.json.letter_id;
+    const id = made.json.letterId;
 
     // 非组长 deliver → 403（actor_forbidden）
     assert.equal((await req('POST', `/internal/v1/letters/${id}/state`, { action: 'deliver', actor: 'erin' })).status, 403);
@@ -162,11 +211,11 @@ describe('letters endpoints (LG-026-P2-B1/B2)', () => {
     assert.equal((await req('POST', `/internal/v1/letters/${id}/state`, { action: 'done' })).status, 400);
   });
 
-  it('escalate ACL: outside allowlist → 403 + ledger trail; COS passes (B2)', async () => {
+  it('escalate ACL: outside allowlist → 403 + ledger trail (B2)', async () => {
     const made = await req('POST', '/internal/v1/letters', {
-      from: 'gina', to: 'hank', priority: '重要', payload: {},
+      actor: 'gina', to: 'hank', priority: '重要', payload: {},
     });
-    const id = made.json.letter_id;
+    const id = made.json.letterId;
 
     const denied = await req('POST', `/internal/v1/letters/${id}/state`, { action: 'escalate', actor: 'gina' });
     assert.equal(denied.status, 403);
@@ -179,43 +228,64 @@ describe('letters endpoints (LG-026-P2-B1/B2)', () => {
     assert.equal(letter.json.letters[0]!.status, 'pending');
   });
 
-  it('escalate requires envelope.to (原子版强制，缺失 400)', async () => {
+  it('escalate requires envelope with from=actor (F1) and valid priority (F2)', async () => {
     const made = await req('POST', '/internal/v1/letters', {
-      from: 'ivy', to: 'jack', priority: '重要', payload: {},
+      actor: 'ivy', to: 'jack', priority: '重要', payload: {},
     });
-    const id = made.json.letter_id;
-    // 白名单内但缺 envelope → 400
+    const id = made.json.letterId;
+
+    // envelope 缺失 → 400
     const noEnv = await req('POST', `/internal/v1/letters/${id}/state`, { action: 'escalate', actor: 'COS' });
     assert.equal(noEnv.status, 400);
     assert.equal(noEnv.json.error, 'invalid_envelope');
-    // 信件未被冻结（400 前置校验不触库）
+
+    // envelope.from 缺失 → 400（F1：取消缺省，必填=actor）
+    const noFrom = await req('POST', `/internal/v1/letters/${id}/state`, {
+      action: 'escalate', actor: 'COS', envelope: { to: 'BOD', payload: {} },
+    });
+    assert.equal(noFrom.status, 400);
+    assert.match(noFrom.json.message, /from is required/);
+
+    // envelope.from != actor（伪报）→ 400（F1）
+    const fakeFrom = await req('POST', `/internal/v1/letters/${id}/state`, {
+      action: 'escalate', actor: 'COS', envelope: { from: '别人', to: 'BOD', payload: {} },
+    });
+    assert.equal(fakeFrom.status, 400);
+
+    // envelope.priority 非法值 → 400 显拒（F2：缺省仅限未提供）
+    const badPri = await req('POST', `/internal/v1/letters/${id}/state`, {
+      action: 'escalate', actor: 'COS', envelope: { from: 'COS', to: 'BOD', priority: '紧急', payload: {} },
+    });
+    assert.equal(badPri.status, 400);
+    assert.equal(badPri.json.error, 'invalid_priority');
+
+    // 信件未被冻结（以上 400 全部前置校验不触库）
     const letter = await req('GET', `/internal/v1/letters?box=in&to=jack`);
     assert.equal(letter.json.letters[0]!.status, 'pending');
   });
 
-  it('escalate atomic path: freeze original + create ref envelope in one call (CTO 终验裁示③)', async () => {
+  it('escalate atomic path: freeze original + create ref envelope (envelope.from=actor)', async () => {
     const made = await req('POST', '/internal/v1/letters', {
-      from: 'kate', to: 'leo', priority: '急件', payload: { q: 9 },
+      actor: 'kate', to: 'leo', priority: '急件', payload: { q: 9 },
     });
-    const id = made.json.letter_id;
+    const id = made.json.letterId;
 
-    // 白名单内 + envelope 完整 → 200 {original, envelope}
     const esc = await req('POST', `/internal/v1/letters/${id}/state`, {
       action: 'escalate',
       actor: 'COS',
-      envelope: { to: 'BOD', payload: { reason: 'COS 终裁升级' } },
+      envelope: { from: 'COS', to: 'BOD', payload: { reason: 'COS 终裁升级' } },
     });
     assert.equal(esc.status, 200);
     assert.equal(esc.json.original.status, 'escalated');
     assert.equal(esc.json.envelope.refLetterId, id);
     assert.equal(esc.json.envelope.to, 'BOD');
-    assert.equal(esc.json.envelope.from, 'COS'); // 缺省 from=actor
-    assert.equal(esc.json.envelope.priority, '急件'); // 缺省升级链语义
+    assert.equal(esc.json.envelope.from, 'COS');
+    assert.equal(esc.json.envelope.priority, '急件'); // 缺省=升级链语义
 
     // 原信冻结：后续 deliver 拒（409 非法流转）
     assert.equal((await req('POST', `/internal/v1/letters/${id}/state`, { action: 'deliver', actor: '组长' })).status, 409);
 
-    // 台账：原信含 send + escalate 两行，新信封含 send 行
+    // 台账：原信 send + escalate 两行
     const trail = await req('GET', `/internal/v1/ledger?letter_id=${id}`);
     assert.deepEqual(
       trail.json.entries.map((e: any) => e.action),
@@ -235,5 +305,60 @@ describe('letters endpoints (LG-026-P2-B1/B2)', () => {
     const r = await req('POST', '/internal/v1/letters/wake', {});
     assert.equal(r.status, 202);
     assert.equal(r.json.woken, true);
+  });
+
+  // ── P3-R1/R2：SSE 直推 + 上线即报补拉 ──
+
+  it('R2 backlog replay: stream?as=X 推入该席未读（delivered）积压帧', async () => {
+    // 准备：给 carl 一封并投递（delivered=未读积压）
+    const made = await req('POST', '/internal/v1/letters', {
+      actor: 'system', to: 'carl', priority: '常规', payload: { n: 1 },
+    });
+    await req('POST', `/internal/v1/letters/${made.json.letterId}/state`, { action: 'deliver', actor: '组长' });
+
+    // 提交一个会话（stream 端点要求 taskStreams 有 entry；模型死端口只影响后续 agent 输出）
+    const sub = await req('POST', '/internal/v1/tasks/submit', { message: 'backlog probe' });
+    assert.equal(sub.status, 201);
+    const { sessionId } = sub.json;
+
+    // 连接即补拉：首帧必为 carl 的 delivered 积压帧（注册/补拉先于 agentLoop）
+    const frame = await readFirstFrame(
+      `http://127.0.0.1:${appPort}/internal/v1/sessions/${sessionId}/stream?as=carl`,
+      5000,
+      sessionId,
+    );
+    assert.ok(frame, 'expected a frame');
+    assert.equal(frame!.event, 'letter');
+    assert.equal(frame!.data.letterId, made.json.letterId);
+    assert.equal(frame!.data.to, 'carl');
+    assert.equal(frame!.data.status, 'delivered');
+  });
+
+  it('R1 live push: stream?as=X 在连接期间收到新信事件帧（无 payload 全文）', async () => {
+    const sub = await req('POST', '/internal/v1/tasks/submit', { message: 'live push probe' });
+    assert.equal(sub.status, 201);
+    const { sessionId } = sub.json;
+
+    // 连接建立（后台读流）
+    const streamPromise = readFirstFrame(
+      `http://127.0.0.1:${appPort}/internal/v1/sessions/${sessionId}/stream?as=dave-2`,
+      5000,
+      sessionId,
+    );
+    // 给连接建立留出窗口，再寄信触发直推
+    await new Promise((r) => setTimeout(r, 150));
+    const made = await req('POST', '/internal/v1/letters', {
+      actor: 'system', to: 'dave-2', priority: '重要', payload: { secret: 'should-not-leak' },
+    });
+    assert.equal(made.status, 201);
+
+    const frame = await streamPromise;
+    assert.ok(frame, 'expected live letter frame');
+    assert.equal(frame!.event, 'letter');
+    assert.equal(frame!.data.letterId, made.json.letterId);
+    assert.equal(frame!.data.priority, '重要');
+    // 事件帧不带 payload 全文（派工令边界）
+    assert.equal(frame!.data.payload, undefined);
+    assert.ok(!JSON.stringify(frame).includes('should-not-leak'));
   });
 });

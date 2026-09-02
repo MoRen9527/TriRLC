@@ -51,6 +51,8 @@ interface AgentRuntimeState extends HeartbeatAgentConfig {
 export interface TriLCHeartbeatRunner {
   /** Whether the scheduling loop is active. */
   readonly isRunning: boolean;
+  /** Registered agent count (healthz 实际读数，P2 顺手件 F4 兑现). */
+  readonly agentCount: number;
   /** Start the scheduling loop. No-op if already started. */
   start(): void;
   /** Stop the scheduling loop and clear all timers. */
@@ -177,6 +179,10 @@ export function createHeartbeatRunner(opts: {
   return {
     get isRunning(): boolean {
       return started;
+    },
+
+    get agentCount(): number {
+      return agents.size;
     },
 
     requestHeartbeatNow(opts?: { reason?: string; coalesceMs?: number }): void {

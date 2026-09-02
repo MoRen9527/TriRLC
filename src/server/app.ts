@@ -33,8 +33,9 @@ import { agentEventsToOpenAISSE, formatOpenAISSE, OPENAI_SSE_DONE } from './open
 import { registerShellExecTool, getDefaultSupervisor, cancelAllShellProcesses } from '../tools/shell-exec.js';
 import { createSessionStore } from '../session-store/index.js';
 import { createLetterStore, LEAD_AGENT_ID, ESCALATE_ACTOR_ALLOWLIST } from '../letter-store/store.js';
-import type { LetterAction, LetterPriority } from '../letter-store/types.js';
+import type { LetterAction, LetterPriority, LetterRecord } from '../letter-store/types.js';
 import { registerLeadTools } from '../letter-store/lead-tools.js';
+import { createLetterSweeper } from '../letter-store/letter-sweeper.js';
 import { runSafetyCheck } from '../session-store/safety-check.js';
 import type { SessionRecord, SessionMessageRecord, SessionStatus } from '../session-store/types.js';
 import {
@@ -1275,6 +1276,53 @@ export function createTriLCApp(env: TriLCEnv) {
   // leaderId 与组长 agentId 同源 LEAD_AGENT_ID（单一来源常量，防两处漂移）。
   const letterStore = createLetterStore(`${env.dataDir}/letters.db`, { leaderId: LEAD_AGENT_ID });
 
+  // ── LG-026-P3-R1/R2：信件 SSE 直推注册表 + 广播钩子 ──
+  // 键=席身份（stream 端点 ?as= 声明，连接建立注册/断开清理），广播按 letter.to
+  // === as 匹配目标席。事件帧只带信件摘要（letterId/seq/priority/status/from），
+  // 不带 payload 全文（防注入面扩，派工令边界）。
+  const letterStreamTargets = new Map<string, Set<ServerResponse>>();
+
+  function pushLetterEvent(letter: LetterRecord, event: 'letter_inbox' | 'letter_state'): void {
+    const targets = letterStreamTargets.get(letter.to);
+    if (!targets) return;
+    const frame = JSON.stringify({
+      event,
+      letterId: letter.letterId,
+      seqNo: letter.seqNo,
+      from: letter.from,
+      to: letter.to,
+      priority: letter.priority,
+      status: letter.status,
+    });
+    for (const res of targets) {
+      try {
+        res.write(`event: letter\ndata: ${frame}\n\n`);
+      } catch { /* 连接已断：等 close 事件清理 */ }
+    }
+  }
+
+  // ── LG-026-P3-F3：寄信速率上限（per-token 滑窗，可配 TRILC_LETTER_RATE_LIMIT，默认 60/min）──
+  // 超限 429。留痕落法：ledger 以 letter_id 外键承载，拒绝发生在入库前无法挂行
+  // （不造孤儿行）——落 console.warn + rateLimitedCount 计数（healthz 可观测），
+  // 如需持久留痕候 CTO 裁（加独立审计表超本令面）。
+  const letterRateWindowMs = 60_000;
+  const letterRateLimit = Math.max(1, Number(process.env.TRILC_LETTER_RATE_LIMIT ?? '60') || 60);
+  const letterRateWindows = new Map<string, number[]>();
+  let letterRateLimitedCount = 0;
+
+  function letterRateLimitHit(token: string): boolean {
+    const now = Date.now();
+    const window = (letterRateWindows.get(token) ?? []).filter((t) => now - t < letterRateWindowMs);
+    if (window.length >= letterRateLimit) {
+      letterRateWindows.set(token, window);
+      letterRateLimitedCount++;
+      return true;
+    }
+    window.push(now);
+    letterRateWindows.set(token, window);
+    return false;
+  }
+
   // ── Init Chain（链路进度状态机；与公司态 CompanyInitState 分离独立持久）──
   // 事件经 publish 同通道发布（init:chain-changed / init:selfcheck-* / init:step-event 族）。
   const initChain = new InitChain(env.dataDir, { onEvent: publish });
@@ -1387,6 +1435,13 @@ export function createTriLCApp(env: TriLCEnv) {
   // ── Session Reaper ──
   const sessionReaper = createSessionReaper({
     storePath: `${env.dataDir}/sessions.db`,
+  });
+
+  // ── LG-026-P3-R3/R4：信箱定时扫描（超时升级链 + ttl 到期）──
+  // session-reaper 同款内部 sweep；重推唤醒走同进程组长 wake。
+  const letterSweeper = createLetterSweeper({
+    letterStore,
+    wake: () => heartbeatRunner.requestHeartbeatNow({ reason: 'action' }),
   });
 
   // ── Minimal Cron Engine ──
@@ -1674,7 +1729,7 @@ export function createTriLCApp(env: TriLCEnv) {
             },
             heartbeat: {
               enabled: heartbeatRunner.isRunning,
-              agentCount: 1, // default heartbeat agent
+              agentCount: heartbeatRunner.agentCount, // P3-F4：注册表实际数（含通道态组长）
             },
             cron: {
               enabled: cronEngine.isRunning,
@@ -3106,7 +3161,7 @@ export function createTriLCApp(env: TriLCEnv) {
 
         // ── GET /internal/v1/sessions/{id} ──
         // Returns a single session with its messages.
-        if (req.url?.startsWith('/internal/v1/sessions/') && !req.url.endsWith('/stream') && !req.url.endsWith('/cancel') && !req.url.endsWith('/fork') && req.method === 'GET') {
+        if (req.url?.startsWith('/internal/v1/sessions/') && !req.url.endsWith('/stream') && !req.url.includes('/stream?') && !req.url.endsWith('/cancel') && !req.url.endsWith('/fork') && req.method === 'GET') {
           const sessionIdMatch = req.url.match(/^\/internal\/v1\/sessions\/([^/]+)$/);
           if (sessionIdMatch) {
             const sessionId = sessionIdMatch[1];
@@ -3376,11 +3431,14 @@ export function createTriLCApp(env: TriLCEnv) {
           return;
         }
 
-        // ── SSE GET /internal/v1/sessions/{id}/stream ──
+        // ── SSE GET /internal/v1/sessions/{id}/stream[?as=<席身份>] ──
         // W30 S2: Real-time SSE stream of LLM output + tool call status.
         // Event types: delta, tool_use, tool_result, task_progress, task_done, task_error
-        if (req.url?.startsWith('/internal/v1/sessions/') && req.url.endsWith('/stream') && req.method === 'GET') {
-          const sessionId = req.url.split('/')[4]; // /internal/v1/sessions/{id}/stream
+        // P3-R1/R2: ?as= 声明收信身份 → 注册直推 + 上线即报补拉（query 兼容 pathname 匹配）。
+        if (req.url?.startsWith('/internal/v1/sessions/')
+          && (req.url.endsWith('/stream') || req.url.includes('/stream?'))
+          && req.method === 'GET') {
+          const sessionId = req.url.split('/')[4]!.split('?')[0]!; // /internal/v1/sessions/{id}/stream[?as=…]
           const entry = taskStreams.get(sessionId);
 
           if (!entry) {
@@ -3400,6 +3458,40 @@ export function createTriLCApp(env: TriLCEnv) {
           const writeSSE = (eventType: string, data: object) => {
             res.write(`event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`);
           };
+
+          // ── LG-026-P3-R1/R2：信件直推注册 + 上线即报补拉 ──
+          // 连接 URL ?as=<席身份> 声明收信身份（收信声明语义，非派工 owner 语义）；
+          // 注册进直推注册表（断开/结束清理）；该席有未读积压（delivered 未读）则
+          // 补拉推帧（7×24 上线即报，spec §二.3）。
+          const asRole = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
+            .searchParams.get('as');
+          if (asRole) {
+            const targets = letterStreamTargets.get(asRole) ?? new Set<ServerResponse>();
+            targets.add(res);
+            letterStreamTargets.set(asRole, targets);
+            const cleanupTargets = () => {
+              const set = letterStreamTargets.get(asRole);
+              if (!set) return;
+              set.delete(res);
+              if (set.size === 0) letterStreamTargets.delete(asRole);
+            };
+            req.on('close', cleanupTargets);
+            res.on('close', cleanupTargets);
+            try {
+              const backlog = letterStore.listLetters({ to: asRole, status: 'delivered' });
+              for (const letter of backlog) {
+                res.write(`event: letter\ndata: ${JSON.stringify({
+                  event: 'letter_inbox',
+                  letterId: letter.letterId,
+                  seqNo: letter.seqNo,
+                  from: letter.from,
+                  to: letter.to,
+                  priority: letter.priority,
+                  status: letter.status,
+                })}\n\n`);
+              }
+            } catch { /* 补拉失败不阻断 stream */ }
+          }
 
           // Mark running
           entry.status = 'running';
@@ -4161,12 +4253,25 @@ export function createTriLCApp(env: TriLCEnv) {
           return;
         }
 
-        // ── LG-026 信件端点五件（P2-B1/B2；全在全局门后：Host/Origin + X-Internal-Token 已校验）──
+        // ── LG-026 信件端点五件（P2-B1/B2 + P3-R/F 裁示；全在全局门后：Host/Origin + X-Internal-Token 已校验）──
         // 通用面双实例可用（P4 互备基座）；wake/组长注册仅通道 profile 生效（B3）。
+        // 响应契约（P3-F4 统一驼峰）：信件对象字段 letterId/seqNo/from/to/priority/
+        // status/createdAt/deliveredAt/readAt/escalatedAt/payload/ttlSeconds/retries/
+        // lastError/refLetterId；操作响应 { ok, ... }；错误 { error, message? }。
+        // 寄信入参契约：{ actor(必填=发件人身份，from 强制=actor 覆盖), to, priority,
+        // payload, ttl?, letter_id? }。
 
-        // POST /internal/v1/letters — 寄信 → { letter_id, seq_no }
+        // POST /internal/v1/letters — 寄信 → { letterId, seqNo }
         // payload 写入半校验（O2 双保险）：必须为可 JSON 序列化的非空结构。
         if (req.url === '/internal/v1/letters' && req.method === 'POST') {
+          // F3：per-token 滑窗速率上限（默认 60/min，TRILC_LETTER_RATE_LIMIT 可配）
+          const gateToken = extractInternalToken(req.headers) ?? 'anon';
+          if (letterRateLimitHit(String(gateToken))) {
+            console.warn(`[trilc:letters] rate limit exceeded (429), token=${String(gateToken).slice(0, 8)}…, total=${letterRateLimitedCount}`);
+            res.writeHead(429, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: 'rate_limited', message: `letter rate limit ${letterRateLimit}/min exceeded` }));
+            return;
+          }
           const chunks: Buffer[] = [];
           for await (const chunk of req) chunks.push(chunk);
           let body: Record<string, unknown>;
@@ -4177,12 +4282,20 @@ export function createTriLCApp(env: TriLCEnv) {
             res.end(JSON.stringify({ error: 'invalid_json' }));
             return;
           }
-          const from = body.from;
+          // F1（ST B1 裁示）：from 强制=actor——请求体 actor 必填为发件人身份，
+          // 请求体 from 覆盖为 actor（伪报防线的覆盖语义，e2e 断言覆盖）。
+          const actor = body.actor;
+          if (typeof actor !== 'string' || !actor.trim()) {
+            res.writeHead(400, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: 'invalid_actor', message: 'actor is required (from is forced to actor)' }));
+            return;
+          }
+          const from = actor;
           const to = body.to;
           const priority = body.priority ?? '常规';
-          if (typeof from !== 'string' || !from.trim() || typeof to !== 'string' || !to.trim()) {
+          if (typeof to !== 'string' || !to.trim()) {
             res.writeHead(400, { 'content-type': 'application/json' });
-            res.end(JSON.stringify({ error: 'invalid_envelope', message: 'from/to must be non-empty strings' }));
+            res.end(JSON.stringify({ error: 'invalid_envelope', message: 'to must be a non-empty string' }));
             return;
           }
           const pri = priority as LetterPriority;
@@ -4210,8 +4323,10 @@ export function createTriLCApp(env: TriLCEnv) {
             });
             // B4 唤醒链：入件即醒（同进程 wake；通道态组长 eventDriven 即办，无组长时空转无害）
             heartbeatRunner.requestHeartbeatNow({ reason: 'action' });
+            // R1 L1 直推：目标席 stream 活则推信件事件帧（无 payload 全文）
+            pushLetterEvent(rec, 'letter_inbox');
             res.writeHead(201, { 'content-type': 'application/json' });
-            res.end(JSON.stringify({ ok: true, letter_id: rec.letterId, seq_no: rec.seqNo }));
+            res.end(JSON.stringify({ ok: true, letterId: rec.letterId, seqNo: rec.seqNo }));
           } catch (err) {
             const msg = (err as Error).message;
             const status = msg.startsWith('duplicate_id') ? 409 : 400;
@@ -4298,8 +4413,9 @@ export function createTriLCApp(env: TriLCEnv) {
             }
             // CTO 终验裁示（2026-09-02T05:32Z 债务③）：escalate 强制原子版——
             // 端点与组长工具归一走 escalateLetter（冻结原信+建 ref 新信封单事务），
-            // 消「升级无新信封」轨迹断链的双入口分叉；envelope 必填（缺省 from=actor，
-            // priority 缺省 '急件'=升级链语义）。
+            // 消「升级无新信封」轨迹断链的双入口分叉。
+            // P3-F1/F2（ST B1/B4 裁示）：envelope.from 必填且=actor（伪报 400）；
+            // envelope.priority 提供但非法 400 显拒（缺省仅限未提供='急件'）。
             if (action === 'escalate') {
               const envBody = body.envelope as Record<string, unknown> | undefined;
               const envTo = envBody?.to;
@@ -4308,14 +4424,29 @@ export function createTriLCApp(env: TriLCEnv) {
                 res.end(JSON.stringify({ error: 'invalid_envelope', message: 'escalate requires envelope.to (new ref envelope recipient)' }));
                 return;
               }
+              const envFrom = envBody.from;
+              if (typeof envFrom !== 'string' || !envFrom.trim() || envFrom !== actor) {
+                res.writeHead(400, { 'content-type': 'application/json' });
+                res.end(JSON.stringify({ error: 'invalid_envelope', message: 'escalate envelope.from is required and must equal actor' }));
+                return;
+              }
+              if (envBody.priority !== undefined && !['常规', '重要', '急件'].includes(envBody.priority as string)) {
+                res.writeHead(400, { 'content-type': 'application/json' });
+                res.end(JSON.stringify({ error: 'invalid_priority', message: 'envelope.priority must be 常规|重要|急件 when provided' }));
+                return;
+              }
               try {
                 const result = letterStore.escalateLetter(letterId, actor, {
-                  from: typeof envBody.from === 'string' && envBody.from ? envBody.from : actor,
+                  from: envFrom,
                   to: envTo,
-                  priority: envBody.priority === '常规' || envBody.priority === '重要' ? envBody.priority : '急件',
+                  priority: envBody.priority !== undefined ? (envBody.priority as LetterPriority) : '急件',
                   payload: envBody.payload ?? { escalatedBy: actor },
                   ttlSeconds: typeof envBody.ttl === 'number' ? envBody.ttl : null,
                 });
+                // R1 直推：原信状态变化推帧（新信封收件方照常走入库帧逻辑无——
+                // escalateLetter 直落库，新信封对 its to 也推一帧）
+                pushLetterEvent(result.original, 'letter_state');
+                pushLetterEvent(result.envelope, 'letter_inbox');
                 res.writeHead(200, { 'content-type': 'application/json' });
                 res.end(JSON.stringify({ ok: true, original: result.original, envelope: result.envelope }));
               } catch (err) {
@@ -4330,6 +4461,8 @@ export function createTriLCApp(env: TriLCEnv) {
             }
             try {
               const rec = letterStore.transition(letterId, action as LetterAction, actor);
+              // R1 直推：流转成功推帧
+              pushLetterEvent(rec, 'letter_state');
               res.writeHead(200, { 'content-type': 'application/json' });
               res.end(JSON.stringify({ ok: true, letter: rec }));
             } catch (err) {
@@ -4631,6 +4764,8 @@ export function createTriLCApp(env: TriLCEnv) {
 
       heartbeatRunner.updateAgents(agents);
       heartbeatRunner.start();
+      // LG-026-P3-R3/R4：信箱超时升级链 + ttl 到期扫描（session-reaper 同款内部 sweep）
+      letterSweeper.start();
       publish({ type: "heartbeat:sent", nodeId: env.nodeId });
       console.log(`[trilc] heartbeat runner started (${agents.length} agent${agents.length > 1 ? "s" : ""})`);
 
@@ -4683,6 +4818,7 @@ export function createTriLCApp(env: TriLCEnv) {
     async stop(): Promise<void> {
       cronEngine.stop();
       sessionReaper.stop();
+      letterSweeper.stop();
       heartbeatRunner.stop();
       mirrorPusher.stop();
       updateCheckLoop?.stop();
