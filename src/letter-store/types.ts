@@ -31,11 +31,11 @@ export interface LetterRecord {
   to: string;
   priority: LetterPriority;
   status: LetterStatus;
-  createdAt: string;
+  createdAt: string; // ISO+Z（旧库无 Z 值读侧规范化视为 UTC）
   deliveredAt: string | null;
   readAt: string | null;
   escalatedAt: string | null;
-  payload: unknown;
+  payload: unknown; // JSON 反序列化；坏 payload 读侧容错落 raw string（lastError='payload_parse_failed'）
   ttlSeconds: number | null;
   retries: number;
   lastError: string | null;

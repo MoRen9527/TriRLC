@@ -350,3 +350,79 @@ describe('LetterStore', () => {
     });
   });
 });
+
+// ── ⑥ 批 A 整改（O4 时刻显式 Z + O2 读侧容错）──
+
+describe('LetterStore batch-A amendments', () => {
+  let store: LetterStore;
+
+  beforeEach(() => {
+    cleanup();
+    store = createLetterStore(TEST_DB, { leaderId: LEADER });
+  });
+
+  afterEach(() => {
+    try { store.close(); } catch { /* already closed */ }
+    cleanup();
+  });
+
+  it('timestamps are written with explicit Z suffix (O4)', () => {
+    const rec = store.insertLetter(envelope());
+    assert.match(rec.createdAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    store.transition(rec.letterId, 'deliver', LEADER);
+    const delivered = store.getLetter(rec.letterId)!;
+    assert.match(delivered.deliveredAt!, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    const trail = store.listLedger({ letterId: rec.letterId });
+    assert.match(trail[0].at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  });
+
+  it('legacy timestamp values without Z are normalized as UTC on read (O4 兼容)', () => {
+    // 模拟 P1 旧库行：datetime('now') 产出无 Z 格式
+    store.close();
+    const db = new DatabaseSync(TEST_DB);
+    db.prepare(`
+      INSERT INTO letters (letter_id, seq_no, "from", "to", priority, status, created_at, delivered_at, payload)
+      VALUES ('LT-legacy-1', 1, 'alice', 'bob', '常规', 'delivered', '2026-09-01 10:00:00', '2026-09-01 11:00:00', '{}')
+    `).run();
+    db.close();
+    store = createLetterStore(TEST_DB, { leaderId: LEADER });
+    const got = store.getLetter('LT-legacy-1')!;
+    assert.equal(got.createdAt, '2026-09-01T10:00:00Z');
+    assert.equal(got.deliveredAt, '2026-09-01T11:00:00Z');
+  });
+
+  it('corrupt payload row does not poison listLetters (O2 读侧容错)', () => {
+    store.insertLetter(envelope({ to: 'good-1' }));
+    store.close();
+    const db = new DatabaseSync(TEST_DB);
+    db.prepare(`
+      INSERT INTO letters (letter_id, seq_no, "from", "to", priority, status, payload)
+      VALUES ('LT-bad-1', 99, 'alice', 'bob', '常规', 'pending', '{"broken"')
+    `).run();
+    db.close();
+    store = createLetterStore(TEST_DB, { leaderId: LEADER });
+
+    const all = store.listLetters(); // 不炸
+    assert.equal(all.length, 2);
+    const bad = all.find((l) => l.letterId === 'LT-bad-1')!;
+    assert.equal(bad.payload, '{"broken"'); // 落 raw
+    assert.equal(bad.lastError, 'payload_parse_failed');
+    const good = all.find((l) => l.to === 'good-1')!;
+    assert.deepStrictEqual(good.payload, { text: 'hello' });
+    assert.equal(good.lastError, null);
+  });
+
+  it('corrupt payload keeps pre-existing last_error intact (不覆写投递错误)', () => {
+    store.close();
+    const db = new DatabaseSync(TEST_DB);
+    db.prepare(`
+      INSERT INTO letters (letter_id, seq_no, "from", "to", priority, status, payload, last_error)
+      VALUES ('LT-bad-2', 98, 'alice', 'bob', '常规', 'pending', 'not-json', 'SSE offline')
+    `).run();
+    db.close();
+    store = createLetterStore(TEST_DB, { leaderId: LEADER });
+    const bad = store.getLetter('LT-bad-2')!;
+    assert.equal(bad.payload, 'not-json');
+    assert.equal(bad.lastError, 'SSE offline'); // 保留投递错误原值，不覆写
+  });
+});

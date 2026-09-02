@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS letters (
   "to" TEXT NOT NULL,
   priority TEXT NOT NULL DEFAULT '常规' CHECK (priority IN ('常规', '重要', '急件')),
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'delivered', 'read', 'escalated', 'done')),
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
   delivered_at TEXT,
   read_at TEXT,
   escalated_at TEXT,
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS ledger (
   letter_id TEXT NOT NULL REFERENCES letters(letter_id) ON DELETE CASCADE,
   actor TEXT NOT NULL,
   action TEXT NOT NULL,
-  at TEXT NOT NULL DEFAULT (datetime('now'))
+  at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_ledger_letter ON ledger(letter_id, id);
@@ -129,8 +129,26 @@ export function createLetterStore(dbPath: string, opts?: LetterStoreOptions) {
 
   // ── Row mapper ──
 
+  // O4 时刻显式 Z：无 Z 旧值（datetime('now') 产出 'YYYY-MM-DD HH:MM:SS'）视为 UTC，规范化为 ISO+Z
+  function normalizeTs(v: unknown): string | null {
+    if (typeof v !== 'string' || v.length === 0) return null;
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(v)) return v.replace(' ', 'T') + 'Z';
+    return v;
+  }
+
   function rowToLetter(row: Record<string, unknown>): LetterRecord {
+    // O2 读侧容错：坏 payload 不炸遍历（listLetters 全表读），落 raw + lastError 标记（不写库，保留投递错误原值）
     const payloadRaw = row.payload;
+    let payload: unknown = payloadRaw;
+    let lastError = (row.last_error as string) ?? null;
+    if (typeof payloadRaw === 'string') {
+      try {
+        payload = JSON.parse(payloadRaw);
+      } catch {
+        payload = payloadRaw;
+        if (!lastError) lastError = 'payload_parse_failed';
+      }
+    }
     return {
       letterId: row.letter_id as string,
       seqNo: Number(row.seq_no),
@@ -138,14 +156,14 @@ export function createLetterStore(dbPath: string, opts?: LetterStoreOptions) {
       to: row.to as string,
       priority: row.priority as LetterPriority,
       status: row.status as LetterStatus,
-      createdAt: row.created_at as string,
-      deliveredAt: (row.delivered_at as string) ?? null,
-      readAt: (row.read_at as string) ?? null,
-      escalatedAt: (row.escalated_at as string) ?? null,
-      payload: typeof payloadRaw === 'string' ? JSON.parse(payloadRaw) : payloadRaw,
+      createdAt: normalizeTs(row.created_at) as string,
+      deliveredAt: normalizeTs(row.delivered_at),
+      readAt: normalizeTs(row.read_at),
+      escalatedAt: normalizeTs(row.escalated_at),
+      payload,
       ttlSeconds: (row.ttl as number | null) ?? null,
       retries: Number(row.retries ?? 0),
-      lastError: (row.last_error as string) ?? null,
+      lastError,
       refLetterId: (row.ref_letter_id as string) ?? null,
     };
   }
@@ -206,7 +224,7 @@ export function createLetterStore(dbPath: string, opts?: LetterStoreOptions) {
       throw new Error(`actor_forbidden: read requires recipient(${String(row.to)}), got ${actor}`);
     }
 
-    const now = db.prepare("SELECT datetime('now') AS t").get() as { t: string };
+    const now = db.prepare("SELECT strftime('%Y-%m-%dT%H:%M:%SZ', 'now') AS t").get() as { t: string };
     updateTransitionStmt.run(
       rule.to,
       action === 'deliver' ? now.t : (row.delivered_at as string | null),
