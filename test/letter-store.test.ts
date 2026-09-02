@@ -202,7 +202,7 @@ describe('LetterStore', () => {
   // ── ④ escalate 冻结语义 ──
 
   describe('escalate / freeze semantics', () => {
-    it('escalates from any mainline state; frozen letter only allows done', () => {
+    it('escalates from any mainline state; frozen letter rejects everything (绝对终态)', () => {
       for (const pre of ['none', 'deliver', 'read'] as const) {
         const rec = store.insertLetter(envelope({ to: `frozen-${pre}` }));
         if (pre === 'deliver' || pre === 'read') store.transition(rec.letterId, 'deliver', LEADER);
@@ -210,13 +210,33 @@ describe('LetterStore', () => {
         const esc = store.transition(rec.letterId, 'escalate', LEADER);
         assert.equal(esc.status, 'escalated');
         assert.ok(esc.escalatedAt);
-        // 冻结：主链动作全拒
-        assert.throws(() => store.transition(rec.letterId, 'deliver', LEADER), /illegal_transition/);
-        assert.throws(() => store.transition(rec.letterId, 'read', `frozen-${pre}`), /illegal_transition/);
-        assert.throws(() => store.transition(rec.letterId, 'escalate', LEADER), /illegal_transition/);
-        // 冻结后仅 done 可达
-        assert.equal(store.transition(rec.letterId, 'done', LEADER).status, 'done');
+        // 冻结：全拒（含 done——升级件办结走 ref 新信封，原信不可再动）
+        for (const action of ['deliver', 'read', 'escalate', 'done'] as const) {
+          assert.throws(
+            () => store.transition(rec.letterId, action, `frozen-${pre}`),
+            /illegal_transition/,
+            `escalated 后 ${action} 应拒绝`,
+          );
+        }
       }
+    });
+
+    it('ref envelope walks its own lifecycle to done (升级件办结在新信封自身状态机)', () => {
+      const rec = store.insertLetter(envelope({ to: 'chain-done' }));
+      const { original, envelope: env } = store.escalateLetter(rec.letterId, LEADER, {
+        from: LEADER,
+        to: 'COS',
+        priority: '急件',
+        payload: { reason: '超时未读' },
+      });
+      assert.equal(original.status, 'escalated');
+      // 新信封照走主链：pending → delivered → read → done
+      assert.equal(store.transition(env.letterId, 'deliver', LEADER).status, 'delivered');
+      assert.equal(store.transition(env.letterId, 'read', 'COS').status, 'read');
+      const done = store.transition(env.letterId, 'done', 'COS');
+      assert.equal(done.status, 'done');
+      // 原信冻结不受新信封办结影响
+      assert.equal(store.getLetter(rec.letterId)!.status, 'escalated');
     });
 
     it('ref_letter_id requires the referenced letter to be escalated (原件冻结校验)', () => {

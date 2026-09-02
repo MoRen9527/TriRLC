@@ -11,11 +11,11 @@
 //
 // Key behaviors:
 //   - seq 全局单调：寄信事务内 MAX(seq_no)+1 分配，崩溃回滚无空洞，重启 MAX 续号
-//   - 状态机门禁 store 层实现（非法流转拒绝）：
+//   - 状态机门禁 store 层实现（非法流转拒绝，严格冻结版）：
 //       deliver:  pending → delivered   （actor 须为组长 — 唯一投递执行者）
 //       read:     delivered → read      （actor 须为收件人 — 唯一定读权，组长不得代标）
-//       escalate: pending|delivered|read → escalated（旁路，升后原件冻结）
-//       done:     read|escalated → done（办结终态，此后全拒）
+//       escalate: pending|delivered|read → escalated（旁路绝对终态，升后原件冻结全拒）
+//       done:     read → done（办结终态，此后全拒；升级件办结走 ref 新信封自身状态机）
 //   - 原件冻结校验：refLetterId 只许引用 status='escalated' 的原信
 //   - escalateLetter() 单事务原子完成「冻结原信 + 建新信封 ref」防中间态
 
@@ -76,7 +76,7 @@ const TRANSITIONS: Record<LetterAction, { from: LetterStatus[]; to: LetterStatus
   deliver: { from: ['pending'], to: 'delivered', atColumn: 'delivered_at' },
   read: { from: ['delivered'], to: 'read', atColumn: 'read_at' },
   escalate: { from: ['pending', 'delivered', 'read'], to: 'escalated', atColumn: 'escalated_at' },
-  done: { from: ['read', 'escalated'], to: 'done', atColumn: null },
+  done: { from: ['read'], to: 'done', atColumn: null },
 };
 
 const PRIORITIES: LetterPriority[] = ['常规', '重要', '急件'];

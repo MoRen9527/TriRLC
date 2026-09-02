@@ -5,8 +5,8 @@
 
 export type LetterPriority = '常规' | '重要' | '急件';
 
-// 状态机：pending → delivered → read → (escalated) → done
-// escalated = 旁路终态（任一主链态可升，升后原件冻结，除 done 外全拒）
+// 状态机（严格冻结版）：pending → delivered → read → done 主链；
+// escalated = 旁路绝对终态（任一主链态可升，升后原件冻结全拒，办结走 ref 新信封自身状态机）
 export type LetterStatus = 'pending' | 'delivered' | 'read' | 'escalated' | 'done';
 
 export type LetterAction = 'deliver' | 'read' | 'escalate' | 'done';
