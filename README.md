@@ -26,3 +26,8 @@ Planned modules:
 - src/toolbus: local tools and capabilities
 - src/context-adapter: local workspace and capability adapter
 - src/wallet-upgrade: wallet and consent upgrade flow
+
+## 中央连接面（LG-030 勘定 2026-09-04）
+
+- 本 daemon（8711）经 `TRIMC_BASE_URL`（User env+daemon cmd 双注入，默认覆盖 127.0.0.1:8710 dev 形态）直上送**中央面**（sg 47.245.122.61:8710）；heyuan TriRMC（8.155.54.79）为 R 面周平面迁移自治执行点——两者职责分属两节点。
+- 连接面变更须 CEO 明令（D-17 在册）；代码默认值=dev 同机形态仅限开发。
