@@ -157,6 +157,8 @@ export function readEnv(): TriLCEnv {
   return {
     nodeId,
     port: Number(process.env.TRILC_PORT ?? 8711),
+    // trimcBaseUrl：默认 127.0.0.1:8710=dev 同机形态（本机 TriMC 部署）；
+    // prod 覆盖走 env 注入（TRIMC_BASE_URL，LG-030 两形态并存合法性 2026-09-04）。
     trimcBaseUrl: process.env.TRIMC_BASE_URL ?? 'http://127.0.0.1:8710',
     openclawGatewayUrl: process.env.OPENCLOW_GATEWAY_URL ?? 'ws://127.0.0.1:8822',
     vscodiumGlueBaseUrl: process.env.VSCODIUM_GLUE_BASE_URL ?? 'http://127.0.0.1:8730',
