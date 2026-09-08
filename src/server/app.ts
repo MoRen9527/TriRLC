@@ -14,8 +14,9 @@ import { createServer, type IncomingHttpHeaders, type Server, type ServerRespons
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { timingSafeEqual } from 'node:crypto';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { writeFile } from 'node:fs/promises';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { TriLCEnv } from '../config/env.js';
 import { resolveWeeklyPlaneRoot } from '../project/weekly-plane-root.js';
 import { agentLoop, register as registerTool, canUseTool } from '@tricompany/agent-core';
@@ -1073,29 +1074,48 @@ class ConnectionManager {
   enablePersistence(dataDir: string): void {
     this.stateFile = dataDir.replace(/\\/g, '/') + '/connection-state.json';
     this.restoreState();
-    this.persistState();
+    const ok = this.persistState();
+    // LG-033 7294s 三缺根治件：持久化链启动确认行（写成功/失败均显式——
+    // 防「机制在而档缺」静默形态，7294s 归因批实证内证缺口之一）。
+    if (ok) {
+      console.log(`[trilc:conn] state persistence enabled: ${this.stateFile}`);
+    } else {
+      console.error(`[trilc:conn] state persistence WRITE FAILED at startup: ${this.stateFile} (后续 state 迁移亦不会落档——勘 DataDir 权限/盘面)`);
+    }
   }
 
-  private persistState(): void {
-    if (!this.stateFile) return;
+  /**
+   * 持久化当前连接状态（LG-033 7294s 三缺根治件：写失败显式化——
+   * 原 best-effort catch 吞形态根治：失败 console.error 显式行+返回 false）。
+   * @returns true=落档成功；false=写失败（错误已显式上日志）。
+   */
+  private persistState(): boolean {
+    if (!this.stateFile) return false;
     try {
-      const { mkdirSync, writeFileSync } = require('node:fs');
-      const { dirname } = require('node:path');
+      // LG-033 7294s 根因修：原内嵌 require('node:fs') 在 ESM 运行时 ReferenceError
+      // →被旧 best-effort catch 吞→connection-state.json 从未写成（档案缺机制根因）。
       const dir = dirname(this.stateFile);
-      if (!require('node:fs').existsSync(dir)) mkdirSync(dir, { recursive: true });
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
       writeFileSync(this.stateFile, JSON.stringify({
         state: this.state,
         lastStateChange: new Date().toISOString(),
         consecutiveFailures: this.consecutiveFailures,
         degradedAt: this.degradedAt ? new Date(this.degradedAt).toISOString() : null,
       }, null, 2), { encoding: 'utf-8', mode: 0o600 });
-    } catch { /* best-effort */ }
+      return true;
+    } catch (err) {
+      console.error(
+        `[trilc:conn] state persistence write failed: ${err instanceof Error ? err.message : String(err)} ` +
+        `(file=${this.stateFile})`,
+      );
+      return false;
+    }
   }
 
   private restoreState(): void {
     if (!this.stateFile) return;
     try {
-      const { existsSync, readFileSync } = require('node:fs');
+      // LG-033 7294s 根因修：同 persistState——require ESM 缺陷清除（顶部 import 供用）
       if (!existsSync(this.stateFile)) return;
       const raw = readFileSync(this.stateFile, 'utf-8');
       const saved = JSON.parse(raw) as { state?: string; consecutiveFailures?: number; degradedAt?: string };
