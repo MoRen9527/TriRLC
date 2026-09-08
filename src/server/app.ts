@@ -1717,7 +1717,7 @@ export function createTriLCApp(env: TriLCEnv) {
           res.writeHead(200, { 'content-type': 'application/json' });
           res.end(JSON.stringify({
             ok: true,
-            service: 'trilc',
+            service: 'trirlc',
             serverTime: new Date().toISOString(),
             trimc: triMcOnline ? 'connected' : 'degraded',
             uptime,
@@ -2876,7 +2876,7 @@ export function createTriLCApp(env: TriLCEnv) {
               id: m.id,
               object: 'model',
               created: Math.floor(new Date(m.createdAt).getTime() / 1000),
-              owned_by: 'trilc',
+              owned_by: 'trirlc',
             })),
           }));
           return;
