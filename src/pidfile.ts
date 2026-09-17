@@ -12,7 +12,7 @@ import { access, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/prom
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { platform } from 'node:os';
-import { PID_DIR, PID_FILE } from './paths.js';
+import { PID_DIR, PID_FILE, pidFileFor } from './paths.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -26,7 +26,18 @@ export async function ensurePidDir(): Promise<void> {
   }
 }
 
-export async function readPid(): Promise<number | null> {
+export async function readPid(port?: number): Promise<number | null> {
+  // 2026-09-18 端口命名空间：带 port=读 trilc-<port>.pid，缺文件回退 legacy
+  // trilc.pid（兼容读一版）；不带 port=legacy 语义原样（既有调用/测试）。
+  if (port !== undefined) {
+    try {
+      const content = await readFile(pidFileFor(port), 'utf-8');
+      const pid = parseInt(content.trim(), 10);
+      if (Number.isFinite(pid)) return pid;
+    } catch {
+      /* 新代文件缺——回退 legacy */
+    }
+  }
   try {
     const content = await readFile(PID_FILE, 'utf-8');
     const pid = parseInt(content.trim(), 10);
@@ -37,33 +48,37 @@ export async function readPid(): Promise<number | null> {
 }
 
 /** Atomic PID write: write tmp sibling then rename — readers never observe partial content. */
-export async function writePid(pid: number): Promise<void> {
+export async function writePid(pid: number, port?: number): Promise<void> {
   await ensurePidDir();
-  const tmp = `${PID_FILE}.${process.pid}.tmp`;
+  const target = port !== undefined ? pidFileFor(port) : PID_FILE;
+  const tmp = `${target}.${process.pid}.tmp`;
   await writeFile(tmp, `${pid}\n`, 'utf-8');
-  await rename(tmp, PID_FILE);
+  await rename(tmp, target);
 }
 
-export async function removePidFile(): Promise<void> {
-  try {
-    await unlink(PID_FILE);
-  } catch {
-    // ignore — file may not exist
+export async function removePidFile(port?: number): Promise<void> {
+  const targets = port !== undefined ? [pidFileFor(port), PID_FILE] : [PID_FILE];
+  for (const target of targets) {
+    try {
+      await unlink(target);
+    } catch {
+      // ignore — file may not exist
+    }
   }
 }
 
 // ── Daemon-side registration (owner) ──
 
 /** Daemon startup: register this process's PID (called after server listen succeeds). */
-export async function registerPid(): Promise<void> {
-  await writePid(process.pid);
+export async function registerPid(port?: number): Promise<void> {
+  await writePid(process.pid, port);
 }
 
 /** Daemon shutdown: remove the PID file only if it still names this process. */
-export async function unregisterPid(): Promise<void> {
-  const pid = await readPid();
+export async function unregisterPid(port?: number): Promise<void> {
+  const pid = await readPid(port);
   if (pid !== null && pid === process.pid) {
-    await removePidFile();
+    await removePidFile(port);
   }
 }
 
@@ -145,4 +160,20 @@ export async function findProcessByPort(port: number): Promise<{ pid: number; pr
     if (m) return { pid: parseInt(m[1], 10), proto: 'SS' };
   } catch { /* ss unavailable */ }
   return null;
+}
+
+
+// ── 端口-pid 一致性校验（2026-09-18 CTO 裁：比分文件更硬的保险）──────────────
+
+/**
+ * stop 前定点核对：pidfile 记载 pid 必须==该 port 现监听 pid。
+ * 不一致（陈旧文件/跨 daemon 写入）=拒绝 kill 防二次误杀。
+ */
+export async function verifyPortPidConsistency(
+  port: number,
+  pidFromFile: number,
+): Promise<{ ok: boolean; actualPid: number | null }> {
+  const owner = await findProcessByPort(port);
+  const actualPid = owner?.pid ?? null;
+  return { ok: actualPid === pidFromFile, actualPid };
 }

@@ -2,7 +2,7 @@ import { readFileSync, unlinkSync } from 'node:fs';
 import { readEnv } from './config/env.js';
 import { LocalRuntimeDaemon } from './runtime/daemon.js';
 import { createTriLCApp } from './server/app.js';
-import { PID_FILE } from './paths.js';
+import { PID_FILE, pidFileFor } from './paths.js';
 // REQ-018: daemon owns its PID file — register after listen, unregister on exit.
 import { registerPid, unregisterPid } from './pidfile.js';
 
@@ -130,7 +130,7 @@ async function main(): Promise<void> {
   // The CLI no longer writes the PID file on spawn — this is the single
   // source of truth for "where is the daemon" (works for `trilc run` too).
   try {
-    await registerPid();
+    await registerPid(app.port);
   } catch (err) {
     console.warn('[trilc] PID registration failed (continue):', (err as Error).message);
   }
@@ -146,7 +146,7 @@ async function main(): Promise<void> {
     try {
       await app.stop();
       await daemon.stop();
-      await unregisterPid();
+      await unregisterPid(app.port);
       console.log('[trilc] shutdown complete');
     } catch (err) {
       console.error('[trilc] shutdown error:', err instanceof Error ? err.message : String(err));
@@ -161,13 +161,17 @@ async function main(): Promise<void> {
   // above never runs to completion (e.g. uncaught error path exits).
   // SIGKILL cannot be caught — the CLI's stale-pid logic covers that case.
   process.on('exit', () => {
-    try {
-      const content = readFileSync(PID_FILE, 'utf-8');
-      if (parseInt(content.trim(), 10) === process.pid) {
-        unlinkSync(PID_FILE);
+    // 2026-09-18 端口命名空间：清自己 port 文件（legacy 单文件保留兼容读；
+    // 内容仍是本进程才清——双 daemon 共存防互删）。
+    for (const target of [pidFileFor(app.port), PID_FILE]) {
+      try {
+        const content = readFileSync(target, 'utf-8');
+        if (parseInt(content.trim(), 10) === process.pid) {
+          unlinkSync(target);
+        }
+      } catch {
+        // no PID file or it names another process — leave it alone
       }
-    } catch {
-      // no PID file or it names another process — leave it alone
     }
   });
 }

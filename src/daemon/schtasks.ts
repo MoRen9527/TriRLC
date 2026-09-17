@@ -138,6 +138,20 @@ async function readTaskRuntime(config?: TriLCDaemonServiceConfig): Promise<{
 }> {
   // Try the PID file first (now self-registered by the daemon — REQ-018)
   if (config) {
+    // 2026-09-18 端口命名空间：schtasks 任务绑定的就是本 daemon 实例——有
+    // config.port 用新代文件，legacy 兜底（readPid 兼容读一版）。
+    const { readPid } = await import("../pidfile.js");
+    if (typeof config.port === "number") {
+      const pidFromPort = await readPid(config.port);
+      if (pidFromPort !== null) {
+        try {
+          process.kill(pidFromPort, 0);
+          return { status: "running", pid: pidFromPort };
+        } catch {
+          /* dead — fall through to legacy */
+        }
+      }
+    }
     const { PID_FILE } = await import("../paths.js");
     const pidFile = PID_FILE;
     try {

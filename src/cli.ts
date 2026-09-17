@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { platform } from 'node:os';
 import type { TriLCDaemonServiceConfig } from './daemon/service.js';
 // REQ-018: PID management lives in pidfile.ts (shared with the daemon).
-import { findProcessByPort, isProcessAlive, readPid, removePidFile, waitProcessExit } from './pidfile.js';
+import { findProcessByPort, isProcessAlive, readPid, removePidFile, verifyPortPidConsistency, waitProcessExit } from './pidfile.js';
 import { installTrimcTokenFetch } from './trimc-auth.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -175,7 +175,7 @@ async function cmdStart(port: number, permissionMode?: string, allowRules?: stri
   installTrimcTokenFetch(); // TriMMC /internal token 全局注入（P0 加固配套）
   // Existing PID file → healthy daemon → already running.
   // REQ-018 identity check: PID alive AND healthz ok.
-  const existingPid = await readPid();
+  const existingPid = await readPid(port);
   if (existingPid !== null && await isPidTrilc(existingPid, port)) {
     console.log(`[trilc] daemon already running (pid=${existingPid})`);
     return;
@@ -244,7 +244,7 @@ async function cmdStart(port: number, permissionMode?: string, allowRules?: stri
   let registered = false;
   let spawnDied = false;
   while (Date.now() < pidDeadline) {
-    const registeredPid = await readPid();
+    const registeredPid = await readPid(port);
     if (registeredPid === child.pid) { registered = true; break; }
     if (!isProcessAlive(child.pid)) { spawnDied = true; break; } // spawn died before registering
     await new Promise((r) => setTimeout(r, 500));
@@ -276,10 +276,22 @@ async function cmdStart(port: number, permissionMode?: string, allowRules?: stri
 }
 
 async function cmdStop(port: number = DEFAULT_PORT): Promise<void> {
-  const pid = await readPid();
+  const pid = await readPid(port);
 
   // ── Case A: PID file present ──
   if (pid !== null) {
+    // 端口-pid 一致性校验（2026-09-18 CTO 裁）：pidfile 记载必须==port 现监听
+    // pid——不一致（陈旧文件/跨 daemon 写入）=拒绝 kill 防二次误杀（8711 双录
+    // 实锚；legacy trilc.pid 兼容读同样过本门）。
+    const consistency = await verifyPortPidConsistency(port, pid);
+    if (!consistency.ok) {
+      console.error(
+        `[trilc] refusing to stop: PID file records pid=${pid} but port ${port} ` +
+        `is currently owned by pid=${consistency.actualPid ?? 'none'} — ` +
+        'stale or cross-daemon pidfile. Remove the stale file manually if this is expected.',
+      );
+      return;
+    }
     if (isProcessAlive(pid)) {
       // Graceful HTTP shutdown first (Windows-compatible), then confirm exit.
       const shutdownOk = await gracefulShutdown(port);
@@ -390,7 +402,7 @@ async function cmdRestart(port: number): Promise<void> {
 }
 
 async function cmdStatus(port: number): Promise<void> {
-  const pid = await readPid();
+  const pid = await readPid(port);
   const health = await healthCheck(port);
   const pidAlive = pid !== null && isProcessAlive(pid);
 
@@ -444,7 +456,7 @@ async function cmdChat(port: number, agent?: string, resume?: string, permission
     // Kill any stale daemon occupying the port but not responding.
     // REQ-018: confirm the process actually exited (poll) before removing
     // the PID file; escalate to SIGKILL only after the wait timeout.
-    const existingPid = await readPid();
+    const existingPid = await readPid(port);
     if (existingPid !== null && isProcessAlive(existingPid)) {
       console.log(`[trilc] stale daemon detected (pid=${existingPid}), killing...`);
       try { process.kill(existingPid, 'SIGTERM'); } catch {}
@@ -453,7 +465,7 @@ async function cmdChat(port: number, agent?: string, resume?: string, permission
         try { process.kill(existingPid, 'SIGKILL'); } catch { /* already gone */ }
         await waitProcessExit(existingPid, 3000);
       }
-      await removePidFile();
+      await removePidFile(port);
     }
   }
 
