@@ -1739,6 +1739,10 @@ export function createTriLCApp(env: TriLCEnv) {
             ok: true,
             service: 'trirlc',
             serverTime: new Date().toISOString(),
+            // LG-033 mc_link/mc_peer 双字段（BOD 热重建批 2026-09-08）：自识别面
+            // 归属无需问人；trimc 旧字段保留一版双写（消费方全迁移后下批退役）。
+            mc_link: triMcOnline ? 'connected' : 'degraded',
+            mc_peer: 'trirmc',
             trimc: triMcOnline ? 'connected' : 'degraded',
             uptime,
             activeTasks,

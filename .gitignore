@@ -20,4 +20,6 @@ coverage/
 
 # OS/editor noise
 .DS_Store
-Thumbs.dbdist.bak-*/
+Thumbs.db
+dist.bak-*/
+.tricompany-cognition/
