@@ -20,4 +20,4 @@ coverage/
 
 # OS/editor noise
 .DS_Store
-Thumbs.db
+Thumbs.dbdist.bak-*/
