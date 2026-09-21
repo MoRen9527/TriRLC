@@ -14,7 +14,7 @@ import {
   type AgentContract,
   type EmployeeRosterEntry,
 } from '../config/contract-resolver.js';
-import { injectKnowledgeContext } from '../knowledge-injector/inject.js';
+import { injectKnowledgeContext } from '@trimetaverse/tricode';
 
 /** 员工会话运行时配置（合同 YAML → 运行时）。 */
 export interface SessionConfig {

@@ -7,7 +7,7 @@ import { readFileSync, existsSync, watch } from 'fs';
 import { resolve } from 'path';
 import { parse as parseYaml } from 'yaml';
 import { loadContractV3, type AgentContractV3 } from '@tricompany/agent-core';
-import { syncKnowledgeFromSource } from '../knowledge-injector/sync.js';
+import { syncKnowledgeFromSource } from '@trimetaverse/tricode';
 
 // ── Types ──
 

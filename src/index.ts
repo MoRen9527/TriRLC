@@ -5,6 +5,8 @@ import { createTriLCApp } from './server/app.js';
 import { PID_FILE, pidFileFor } from './paths.js';
 // REQ-018: daemon owns its PID file — register after listen, unregister on exit.
 import { registerPid, unregisterPid } from './pidfile.js';
+import { configureKnowledgePathResolver } from '@trimetaverse/tricode';
+import { getKnowledgeDbPath as knowledgeDbPathResolver, enforceProjectIsolation as enforceKnowledgeIsolation } from './project/multi-project-router.js';
 
 // ── Tool registration (CC-equivalent tools) ──
 // Register before daemon starts accepting agent traffic.
@@ -122,6 +124,12 @@ async function main(): Promise<void> {
       console.log(`[trilc] P6: MCP ready (${mcp.totalToolCount()} tools)`);
     }
   } catch (e) { console.warn('[trilc] MCP init failed:', (e as Error).message); }
+
+  // LG-035 注入器架构：宿主 router 实现注入共用包（knowledge 路径公式/隔离语义保真）
+  configureKnowledgePathResolver({
+    getKnowledgeDbPath: (projectRoot?: string) => knowledgeDbPathResolver(projectRoot),
+    enforceProjectIsolation: (projectRoot: string, dbPath: string) => enforceKnowledgeIsolation(projectRoot, dbPath),
+  });
 
   const app = createTriLCApp(env);
   await app.start();

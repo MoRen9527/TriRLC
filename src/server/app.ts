@@ -62,7 +62,7 @@ import { createHeartbeatRunner, type TriLCHeartbeatRunner, type HeartbeatAgentCo
 import { CompanyInitState } from '../company/init-state.js';
 import { getContractResolver } from '../config/contract-resolver.js';
 import { InitChain } from '../company/init-chain.js';
-import { injectKnowledgeContext } from '../knowledge-injector/inject.js';
+import { injectKnowledgeContext } from '@trimetaverse/tricode';
 import {
   recordKnowledgeMetric,
   getKnowledgeMetricSnapshot,
