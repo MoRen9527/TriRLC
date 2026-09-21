@@ -9,8 +9,8 @@ import { agentLoop } from "@tricompany/agent-core";
 import type { PermissionRule } from "@tricompany/agent-core";
 import type { HeartbeatRunResult } from "./heartbeat-wake.js";
 import type { SessionRecord } from "../session-store/types.js";
-import { injectKnowledgeContext, type KnowledgeInjectionResult } from "../knowledge-injector/inject.js";
-import { isEscalationBlockReason, recordKnowledgeMetric } from "../knowledge-injector/metrics.js";
+import { injectKnowledgeContext, type KnowledgeInjectionResult } from "@trimetaverse/tricode";
+import { isEscalationBlockReason, recordKnowledgeMetric } from "@trimetaverse/tricode";
 
 /**
  * FADE-ASSESS-003 消费路径挂接点③（heartbeat 会话）可测注入缝。
