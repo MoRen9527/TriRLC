@@ -21,8 +21,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { getKnowledgeDbPath, enforceProjectIsolation } from '../src/project/multi-project-router.js';
-import { createKnowledgeStore, layerDomain } from '../src/knowledge-injector/knowledge-db.js';
+import { getKnowledgeDbPath, enforceProjectIsolation } from '@trimetaverse/tricode';
+import { createKnowledgeStore, layerDomain } from '@trimetaverse/tricode';
 import {
   syncKnowledgeFromSource,
   resolveContentRoot,
@@ -30,17 +30,17 @@ import {
   shouldInjectInboxRecord,
   serializeInboxContent,
   INBOX_CLOSED_WINDOW_DAYS,
-} from '../src/knowledge-injector/sync.js';
+} from '@trimetaverse/tricode';
 import {
   buildKnowledgeContextBlock,
   injectKnowledgeContext,
-} from '../src/knowledge-injector/inject.js';
+} from '@trimetaverse/tricode';
 import { injectHeartbeatKnowledge } from '../src/heartbeat/agent-runner.js';
 import {
   recordKnowledgeMetric,
   getKnowledgeMetricSnapshot,
   isEscalationBlockReason,
-} from '../src/knowledge-injector/metrics.js';
+} from '@trimetaverse/tricode';
 import { shouldRunJob } from '../src/cron/timer.js';
 import { setRosterGate, setOnSpawnGateDenied, enforceRosterGate } from '../src/tools/agent-tool.js';
 import { getContractResolver } from '../src/config/contract-resolver.js';
