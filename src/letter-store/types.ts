@@ -13,7 +13,9 @@ export type LetterAction = 'deliver' | 'read' | 'escalate' | 'done';
 
 // 台账 action 超集：寄信本身留痕 'send'（轨迹自寄信起）；
 // 'escalate_denied' = 端点层 ACL 拒绝的升级尝试留痕（B2，store 层状态机不感知）
-export type LedgerAction = LetterAction | 'send' | 'escalate_denied';
+export type LedgerAction = LetterAction | 'send' | 'escalate_denied'
+  // FADE-010 首落①：候批域三动词（候批信自动生成/批毕回流/催办留痕——fullauto-loop joint-plan §一）
+  | 'submit-approval' | 'approve' | 'urge';
 
 export interface LetterEnvelope {
   letterId?: string; // 缺省由 store 生成（LT-<UTC日期>-<8hex>）
