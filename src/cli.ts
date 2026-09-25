@@ -14,7 +14,7 @@ import { findProcessByPort, isProcessAlive, readPid, removePidFile, verifyPortPi
 import { installTrimcTokenFetch } from './trimc-auth.js';
 // TASK-TRIMODEL-RECOVERY-LADDER-01 波③：TriModel 直连恢复梯命令族（core=TriCode trimodel-cli，
 // 本 bin 只做 CoreIO 注入+runCli 派发——core 零仓感知，仓特有项在此注入）。
-import { makeCoreIO, runCli, type ProbeReading } from '@trimetaverse/tricode/trimodel-cli';
+import { defaultL2FlagPath, makeCoreIO, runCli, type ProbeReading } from '@trimetaverse/tricode/trimodel-cli';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -1228,6 +1228,7 @@ async function runModelCommand(restArgs: string[], port: number): Promise<void> 
     binName: 'trirlc',
     machine: 'local-r',
     probes: [daemonHealthProbe(port, 'trirlc')],
+    l2FlagPath: defaultL2FlagPath(),
   });
   process.exitCode = await runCli(restArgs, io);
 }
