@@ -12,6 +12,9 @@ import type { TriLCDaemonServiceConfig } from './daemon/service.js';
 // REQ-018: PID management lives in pidfile.ts (shared with the daemon).
 import { findProcessByPort, isProcessAlive, readPid, removePidFile, verifyPortPidConsistency, waitProcessExit } from './pidfile.js';
 import { installTrimcTokenFetch } from './trimc-auth.js';
+// TASK-TRIMODEL-RECOVERY-LADDER-01 波③：TriModel 直连恢复梯命令族（core=TriCode trimodel-cli，
+// 本 bin 只做 CoreIO 注入+runCli 派发——core 零仓感知，仓特有项在此注入）。
+import { makeCoreIO, runCli, type ProbeReading } from '@trimetaverse/tricode/trimodel-cli';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -1180,11 +1183,67 @@ async function cmdMcp(subcommand: string, args: string[], port: number): Promise
   }
 }
 
+// ── TriModel 直连恢复梯命令族（波③ 范围②④）──
+
+/** 旧 bin 名调用识别（argv[1] basename 词干；覆盖 POSIX symlink 与直调命名面）。
+ * 已知限制（技术债如实标记）：Windows npm .cmd/.ps1 shim 的 argv[1]=真实 cli.js 路径，
+ * 调名不达子进程——该面弃用提示候 M3 删旧键窗随文档收口，不静默不假装。 */
+function legacyBinInvocation(oldName: string): boolean {
+  const raw = process.argv[1] ?? '';
+  const stem = (raw.split(/[\\/]/).pop() ?? '').toLowerCase().replace(/\.(cmd|ps1|exe|js|cjs|mjs)$/, '');
+  return stem === oldName;
+}
+
+/** daemon healthz 探活回调（core status 实时探活用；回调型注入=core 零端点知识）。 */
+// 探针端口取 TRILC_PORT env（watchdog→daemon 既有契约键；部署态注入部署端口即自动对位），
+// 缺省回退 CLI 缺省端口；healthz body 的 service 身份校验兜底——端口上跑的若非本 bin 服务
+// 如实报错位而非误报健康（2026-09-26 实勘：本机 8711=trirlc / 8713=trimlc，代码缺省与部署位分歧）。
+function daemonProbePort(cliPort: number): number {
+  const envPort = Number(process.env.TRILC_PORT);
+  return Number.isInteger(envPort) && envPort > 0 ? envPort : cliPort;
+}
+
+function daemonHealthProbe(cliPort: number, expectedService: string): { name: string; probe: () => Promise<ProbeReading> } {
+  const port = daemonProbePort(cliPort);
+  return {
+    name: `daemon-healthz:${port}`,
+    probe: async () => {
+      const h = await healthCheck(port);
+      if (!h.ok) return { up: false, detail: 'healthz 不可达' };
+      const svc = (h.data as { service?: string } | undefined)?.service;
+      if (svc && svc !== expectedService) {
+        return { up: false, detail: `端口 ${port} 上 service=${svc} 非 ${expectedService}（部署端口错位嫌疑；可在 TRILC_PORT 注入部署端口）` };
+      }
+      return { up: true, detail: 'healthz 200' };
+    },
+  };
+}
+
+/** `model` 父命令：TriCode core runCli 派发（daemon 家族命令零触碰；退出码直通进程退出码）。
+ * CoreIO 注入：who=审计身份（门⑤ 落行）、machine=四象限路由键（joint-plan 问3 21:44 勘正版：
+ * trirlc=本机 Win·R 本地域）、probes=本 daemon healthz 值面。 */
+async function runModelCommand(restArgs: string[], port: number): Promise<void> {
+  const io = makeCoreIO({
+    who: 'trirlc-cmd',
+    binName: 'trirlc',
+    machine: 'local-r',
+    probes: [daemonHealthProbe(port, 'trirlc')],
+  });
+  process.exitCode = await runCli(restArgs, io);
+}
+
 // ── Entry ──
 const { command, port, serviceName, displayName, agent, resume, listSessions, permissionMode, allowRules, denyRules, addDirs, printMode } = parseArgs(process.argv.slice(2));
 
 (async () => {
+  // 正名过渡期（范围④）：旧名调用→单行弃用引导（stderr，不阻塞），随后照常执行。
+  if (legacyBinInvocation('trilc')) {
+    console.error('[trilc] 提示：命令已正名为 trirlc（trilc=过渡期别名，M3 版本移除）；本次照常执行。');
+  }
   switch (command) {
+    case 'model':
+      await runModelCommand(process.argv.slice(3), port);
+      break;
     case 'start':
       await cmdStart(port, permissionMode, allowRules, denyRules, addDirs, printMode);
       break;

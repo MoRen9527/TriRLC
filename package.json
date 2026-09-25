@@ -5,6 +5,7 @@
   "description": "TriMetaverse Local Controller",
   "type": "module",
   "bin": {
+    "trirlc": "./dist/cli.js",
     "trilc": "./dist/cli.js"
   },
   "engines": {
