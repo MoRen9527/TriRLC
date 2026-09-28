@@ -165,6 +165,10 @@ class EncryptedKeyStorage implements KeyStorage {
       // 「绝不静默用他域密文猜」）→ 调用方直落 tier3。归因 decrypt_failed。
       console.error('[trilc:keys] failed to read/decrypt key cache (attribution: decrypt_failed):',
         err instanceof Error ? err.message : String(err));
+      // CTO 裁 1(乙)（de6d49f8）：decrypt_failed daemon 侧 emit 点——cache 域
+      // 不匹配（跨机复制）=此卡在本消费机未生效，回写 failed+归因码（§3.3；
+      // admin 凭据缺席自动跳过，非阻塞）。
+      void reportCardStatus('failed', 'decrypt_failed');
       return null;
     }
   }
@@ -315,7 +319,7 @@ export function keysFromPullEntries(entries: Record<string, PullEntry>): Record<
 // ── API fetch（tier1：卡面 pull 视图）──
 
 type PullOutcome =
-  | { ok: true; keys: Record<string, ProviderKey>; defaultModel: string; strategy: PullStrategySummary | null; refreshIntervalS: number }
+  | { ok: true; keys: Record<string, ProviderKey>; defaultModel: string; strategy: PullStrategySummary | null; refreshIntervalS: number; modelRelayOnly?: boolean }
   | { ok: false; attribution: PullAttributionCode | null; message: string };
 
 async function fetchConfigFromCardApi(apiUrl: string, apiToken?: string): Promise<PullOutcome> {
@@ -350,8 +354,18 @@ async function fetchConfigFromCardApi(apiUrl: string, apiToken?: string): Promis
       refresh_interval_s?: number;
     };
 
-    // 卡未配置（card_present:false）= tier1 无源非故障：保留 tier2/3 不动
+    // 卡未配置（card_present:false）= tier1 凭据无源非故障；但 default_model=
+    // 服务端评估序投影（方案 L32 基线：窗口命中→卡 default_model→env，本方案
+    // 不改此语义）——有值则模型维中继（keys 保留 tier2 现值），daemon 策略
+    // 跟随（STE gate anchor③ 语义）由此维持。
     if (json.card_present === false) {
+      if (typeof json.default_model === 'string' && json.default_model) {
+        return {
+          ok: true, keys: {}, defaultModel: json.default_model,
+          strategy: null, refreshIntervalS: json.refresh_interval_s ?? KEY_REFRESH_INTERVAL_S_DEFAULT,
+          modelRelayOnly: true,
+        };
+      }
       return { ok: false, attribution: null, message: `TriModel card '${FACE_ID}' not configured server-side (card_present=false)` };
     }
 
@@ -480,7 +494,22 @@ export async function initKeyCache(apiUrl: string, dataDir: string, apiToken?: s
 
   // 2. Pull from TriModel card API (tier1)
   const pull = await fetchConfigFromCardApi(apiUrl, _apiToken);
-  if (pull.ok) {
+  if (pull.ok && pull.modelRelayOnly) {
+    // 模型维中继（卡缺席+评估序投影）：keys/strategy 保留 tier2 现值，仅刷
+    // default_model——不回写 status（凭据无源=非完整 apply，server 台账已记
+    // pull ok；避免 15min 周期噪声）
+    _keyCache = {
+      keys: _keyCache?.keys ?? {},
+      defaultModel: pull.defaultModel,
+      strategy: _keyCache?.strategy ?? null,
+      refreshIntervalS: _keyCache?.refreshIntervalS ?? pull.refreshIntervalS,
+      fetchedAt: Date.now(),
+      expiresAt: Date.now() + KEY_CACHE_TTL_MS,
+    };
+    _storage?.write(_keyCache);
+    recordFetchSuccess();
+    console.log(`[trilc:keys] model relay (card absent): default=${pull.defaultModel}`);
+  } else if (pull.ok) {
     _keyCache = {
       keys: pull.keys,
       defaultModel: pull.defaultModel,
@@ -535,6 +564,29 @@ function startRefreshTimer(apiUrl: string, intervalS: number, apiToken?: string)
 
 async function doRefresh(apiUrl: string, apiToken?: string): Promise<void> {
   const pull = await fetchConfigFromCardApi(apiUrl, apiToken);
+  if (pull.ok && pull.modelRelayOnly) {
+    // 模型维中继（同 initKeyCache 分支；刷新路径须触发 updated 回调——
+    // 外部消费者（env apply/聊天面）靠它感知策略翻转，anchor③ 语义）
+    _keyCache = {
+      keys: _keyCache?.keys ?? {},
+      defaultModel: pull.defaultModel,
+      strategy: _keyCache?.strategy ?? null,
+      refreshIntervalS: _keyCache?.refreshIntervalS ?? pull.refreshIntervalS,
+      fetchedAt: Date.now(),
+      expiresAt: Date.now() + KEY_CACHE_TTL_MS,
+    };
+    _storage?.write(_keyCache);
+    recordFetchSuccess();
+    console.log(`[trilc:keys] model relay refresh (card absent): default=${pull.defaultModel}`);
+    if (_onKeyCacheUpdated) {
+      try {
+        _onKeyCacheUpdated(_keyCache);
+      } catch (err) {
+        console.warn('[trilc:keys] onKeyCacheUpdated callback failed:', err instanceof Error ? err.message : String(err));
+      }
+    }
+    return;
+  }
   if (!pull.ok) {
     recordFetchFailure(new Error(pull.message), pull.attribution);
     if (pull.attribution === 'pull_denied') {
