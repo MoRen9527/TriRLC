@@ -97,8 +97,9 @@ async function seedKeyCache(dataDir: string): Promise<void> {
 function allOkFetch(seedDataDir: string): MockFetch {
   return async (url, init) => {
     const u = String(url);
-    if (u.includes('/v1/config/keys')) {
-      return jsonRes(200, { keys: { deepseek: { api_key: 'test-key-123' } }, default_model: 'tmv-deepseek-v4-pro', refresh_interval_s: 900 });
+    if (u.includes('/v1/config/cards/')) {
+      // LG-058 N3：tier1 端点泛化为卡面 pull（载荷=entries 键值，非 keys 聚合形态）
+      return jsonRes(200, { object: 'config.card-pull', face: 'rlc', card_present: true, default_model: 'tmv-deepseek-v4-pro', entries: { e1: { provider: 'deepseek', model: 'tmv-deepseek-v4-pro', api_key: 'test-key-123', enabled: true, updated_at: '2026-09-28T00:00:00Z' } }, refresh_interval_s: 900 });
     }
     if (u.includes('/healthz')) return jsonRes(200, { ok: true, service: 'trilc', uptime: 5 });
     if (u.includes('127.0.0.1:3333/health')) return jsonRes(200, { ok: true });
@@ -178,7 +179,7 @@ test('key-cache 401 → trimodel fail → summary blocked（401 唯一认证阻�
   try {
     setMockFetch(async (url) => {
       const u = String(url);
-      if (u.includes('/v1/config/keys')) return jsonRes(401, { error: 'Unauthorized' });
+      if (u.includes('/v1/config/cards/')) return jsonRes(401, { error: 'Unauthorized' });
       if (u.includes('/healthz')) return jsonRes(200, { ok: true, service: 'trilc', uptime: 5 });
       if (u.includes('127.0.0.1:3333/health')) return jsonRes(200, { ok: true });
       if (u.includes('127.0.0.1:8008/v1/models')) return jsonRes(200, { data: [{ id: 'm' }] });
@@ -206,7 +207,7 @@ test('key-cache 401 → trimodel fail → summary blocked（401 唯一认证阻�
     assert.equal(trimodel?.status, 'fail', '401 → trimodel fail（blocked 级）');
     // 契约修正⑧（i2-1 §七）：detail 用 ks.lastFetchError 实际错误串，不硬编码「fetch 401」
     assert.ok(
-      /TriModel API returned 401/.test(trimodel?.detail ?? ''),
+      /TriModel card pull denied \(401\)/.test(trimodel?.detail ?? ''),
       `detail 含实际错误串（got: ${trimodel?.detail}）`,
     );
   } finally {
@@ -221,7 +222,7 @@ test('tristaciss unreachable → degraded-only → summary degraded（降级继�
   try {
     setMockFetch(async (url) => {
       const u = String(url);
-      if (u.includes('/v1/config/keys')) return jsonRes(200, { keys: { deepseek: { api_key: 'k' } }, default_model: 'tmv-deepseek-v4-pro', refresh_interval_s: 900 });
+      if (u.includes('/v1/config/cards/')) return jsonRes(200, { object: 'config.card-pull', face: 'rlc', card_present: true, default_model: 'tmv-deepseek-v4-pro', entries: { e1: { provider: 'deepseek', model: 'tmv-deepseek-v4-pro', api_key: 'k', enabled: true, updated_at: '2026-09-28T00:00:00Z' } }, refresh_interval_s: 900 });
       if (u.includes('/healthz')) return jsonRes(200, { ok: true, service: 'trilc', uptime: 5 });
       if (u.includes('127.0.0.1:3333/health')) return jsonRes(200, { ok: true });
       if (u.includes('127.0.0.1:8008/v1/models')) throw new Error('ECONNREFUSED');
@@ -258,7 +259,7 @@ test('plane-hint probe: task:failed → 显式红行（分类=模型链族）', 
   try {
     setMockFetch(async (url) => {
       const u = String(url);
-      if (u.includes('/v1/config/keys')) return jsonRes(200, { keys: { deepseek: { api_key: 'k' } }, default_model: 'tmv-deepseek-v4-pro', refresh_interval_s: 900 });
+      if (u.includes('/v1/config/cards/')) return jsonRes(200, { object: 'config.card-pull', face: 'rlc', card_present: true, default_model: 'tmv-deepseek-v4-pro', entries: { e1: { provider: 'deepseek', model: 'tmv-deepseek-v4-pro', api_key: 'k', enabled: true, updated_at: '2026-09-28T00:00:00Z' } }, refresh_interval_s: 900 });
       if (u.includes('/healthz')) return jsonRes(200, { ok: true, service: 'trilc', uptime: 5 });
       if (u.includes('127.0.0.1:3333/health')) return jsonRes(200, { ok: true });
       if (u.includes('127.0.0.1:8008/v1/models')) return jsonRes(200, { data: [{ id: 'm' }] });
@@ -295,7 +296,7 @@ test('plane-hint probe: 零答复伪成功 → fail（A3 红行，不静默吞�
   try {
     setMockFetch(async (url) => {
       const u = String(url);
-      if (u.includes('/v1/config/keys')) return jsonRes(200, { keys: { deepseek: { api_key: 'k' } }, default_model: 'tmv-deepseek-v4-pro', refresh_interval_s: 900 });
+      if (u.includes('/v1/config/cards/')) return jsonRes(200, { object: 'config.card-pull', face: 'rlc', card_present: true, default_model: 'tmv-deepseek-v4-pro', entries: { e1: { provider: 'deepseek', model: 'tmv-deepseek-v4-pro', api_key: 'k', enabled: true, updated_at: '2026-09-28T00:00:00Z' } }, refresh_interval_s: 900 });
       if (u.includes('/healthz')) return jsonRes(200, { ok: true, service: 'trilc', uptime: 5 });
       if (u.includes('127.0.0.1:3333/health')) return jsonRes(200, { ok: true });
       if (u.includes('127.0.0.1:8008/v1/models')) return jsonRes(200, { data: [{ id: 'm' }] });
@@ -332,7 +333,7 @@ test('anti-reentry: running 中再触发 → conflict + 同 runId；完成后复
     const gate = deferred<unknown>();
     setMockFetch(async (url) => {
       const u = String(url);
-      if (u.includes('/v1/config/keys')) return jsonRes(200, { keys: { deepseek: { api_key: 'k' } }, default_model: 'tmv-deepseek-v4-pro', refresh_interval_s: 900 });
+      if (u.includes('/v1/config/cards/')) return jsonRes(200, { object: 'config.card-pull', face: 'rlc', card_present: true, default_model: 'tmv-deepseek-v4-pro', entries: { e1: { provider: 'deepseek', model: 'tmv-deepseek-v4-pro', api_key: 'k', enabled: true, updated_at: '2026-09-28T00:00:00Z' } }, refresh_interval_s: 900 });
       if (u.includes('/healthz')) return gate.promise.then(() => jsonRes(200, { ok: true, service: 'trilc', uptime: 5 }));
       if (u.includes('127.0.0.1:3333/health')) return jsonRes(200, { ok: true });
       if (u.includes('127.0.0.1:8008/v1/models')) return jsonRes(200, { data: [{ id: 'm' }] });
@@ -409,7 +410,7 @@ test("A': degraded-only → 自动推进 onboarding", async () => {
   try {
     setMockFetch(async (url) => {
       const u = String(url);
-      if (u.includes('/v1/config/keys')) return jsonRes(200, { keys: { deepseek: { api_key: 'k' } }, default_model: 'tmv-deepseek-v4-pro', refresh_interval_s: 900 });
+      if (u.includes('/v1/config/cards/')) return jsonRes(200, { object: 'config.card-pull', face: 'rlc', card_present: true, default_model: 'tmv-deepseek-v4-pro', entries: { e1: { provider: 'deepseek', model: 'tmv-deepseek-v4-pro', api_key: 'k', enabled: true, updated_at: '2026-09-28T00:00:00Z' } }, refresh_interval_s: 900 });
       if (u.includes('/healthz')) return jsonRes(200, { ok: true, service: 'trilc', uptime: 5 });
       if (u.includes('127.0.0.1:3333/health')) return jsonRes(200, { ok: true });
       if (u.includes('127.0.0.1:8008/v1/models')) throw new Error('ECONNREFUSED');
@@ -445,7 +446,7 @@ test("A': blocked → 不推进（诊断卡保留，重跑自检幂等）", asyn
   try {
     setMockFetch(async (url) => {
       const u = String(url);
-      if (u.includes('/v1/config/keys')) return jsonRes(401, { error: 'Unauthorized' });
+      if (u.includes('/v1/config/cards/')) return jsonRes(401, { error: 'Unauthorized' });
       if (u.includes('/healthz')) return jsonRes(200, { ok: true, service: 'trilc', uptime: 5 });
       if (u.includes('127.0.0.1:3333/health')) return jsonRes(200, { ok: true });
       if (u.includes('127.0.0.1:8008/v1/models')) return jsonRes(200, { data: [{ id: 'm' }] });
