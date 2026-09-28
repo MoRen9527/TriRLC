@@ -45,6 +45,10 @@ import {
   initKeyCache,
   onKeyCacheUpdated,
   stopKeyCache,
+  clearKeyCache,
+  describeConfig,
+  refreshNow,
+  verifyPull,
 } from '../config/key-cache.js';
 import { TaskMirrorPusher } from '../mirror/pusher.js';
 import type { MirrorTaskSnapshot } from '../mirror/types.js';
@@ -1804,6 +1808,51 @@ export function createTriLCApp(env: TriLCEnv) {
             || !timingSafeStringEquals(gateSuppliedToken, gateInternalToken)) {
           res.writeHead(401, { 'content-type': 'application/json' });
           res.end(JSON.stringify({ error: 'unauthorized: missing or invalid X-Internal-Token' }));
+          return;
+        }
+
+        // ── LG-058 N4：CLI config 命令族内部端点 ──
+        // 方案 §5.1：pull=手动拉取+即时生效+回写 status；show=本地解析链零网络；
+        // verify=三查试跑不落盘；cache show/clear=last-known-good 检视/清除。
+        // 全部在 daemon 进程内执行（CLI 进程独立拉取触达不了 daemon 运行态 env
+        // apply）；CLI 不开写面（§5.2 差异①），本组零卡写端点。
+        if (req.url === '/internal/v1/config/pull' && req.method === 'POST') {
+          try {
+            const result = await refreshNow();
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify(result));
+          } catch (err) {
+            res.writeHead(500, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: 'config_pull_failed', message: (err as Error).message }));
+          }
+          return;
+        }
+        if (req.url === '/internal/v1/config/show' && req.method === 'GET') {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ object: 'config.show', ...describeConfig() }));
+          return;
+        }
+        if (req.url === '/internal/v1/config/verify' && req.method === 'POST') {
+          try {
+            const report = await verifyPull();
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ object: 'config.verify', ...report }));
+          } catch (err) {
+            res.writeHead(500, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: 'config_verify_failed', message: (err as Error).message }));
+          }
+          return;
+        }
+        if (req.url === '/internal/v1/config/cache' && req.method === 'GET') {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ object: 'config.cache', ...describeConfig() }));
+          return;
+        }
+        if (req.url === '/internal/v1/config/cache' && req.method === 'DELETE') {
+          const result = clearKeyCache();
+          console.log(`[trilc:keys] config cache cleared via internal API (hadCache=${result.hadCache}, removed=${result.removedFiles.length})`);
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ object: 'config.cache-cleared', ...result }));
           return;
         }
 

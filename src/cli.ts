@@ -46,6 +46,7 @@ Commands:
   uninstall-regrun   Remove from Registry Run           trilc uninstall-regrun
   daemon             OS-level daemon management         trilc daemon <install|uninstall|stage|status>
   cron               Cron job management                trilc cron <add|list|update|remove|run|log|status>
+  config             TriModel config page family (LG-058) trilc config <pull|show|verify|cache show|cache clear>
   mcp                MCP server management               trilc mcp <add|remove|list|status>
   watchdog           Start watchdog supervisor process   trilc watchdog [--port 8711] [--data-dir <path>]
 
@@ -761,6 +762,107 @@ function resolveDaemonConfig(port: number): TriLCDaemonServiceConfig {
 
 // ── Cron subcommands ──
 
+// ── LG-058 N4：config 命令族（方案 §5.1；daemon 进程内执行，CLI=触发器+读数渲染；
+// CLI 不开写面=§5.2 差异①）──
+async function configRequest(port: number, method: string, path: string, body?: unknown): Promise<Record<string, unknown>> {
+  // P0 安全门契约（fail-closed）：daemon 要求 X-Internal-Token；cronRequest 先例
+  // 未带 token（族外既有缺口，候修不属本席）——本命令族按门契约带。
+  const token = process.env.TRILC_INTERNAL_TOKEN ?? '';
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (token) headers['x-internal-token'] = token;
+  const res = await fetch(`http://127.0.0.1:${port}${path}`, {
+    method,
+    headers,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  const json = await res.json().catch(() => ({})) as Record<string, unknown>;
+  if (res.status === 401) {
+    if (String(json.error ?? '') === 'internal_auth_disabled') {
+      throw new Error('daemon 未配置 TRILC_INTERNAL_TOKEN（P0 安全门缺省全拒）——配置该 env 后重启 daemon 再试');
+    }
+    throw new Error('鉴权失败：TRILC_INTERNAL_TOKEN 未设置或与 daemon 不一致');
+  }
+  if (!res.ok) {
+    throw new Error(json && 'error' in json ? String(json.error) : `HTTP ${res.status}`);
+  }
+  return json;
+}
+
+function ts(n: unknown): string {
+  return typeof n === 'number' && n > 0 ? new Date(n).toISOString() : '-';
+}
+
+async function cmdConfig(subcommand: string, port: number): Promise<void> {
+  try {
+    switch (subcommand) {
+      case 'pull': {
+        const r = await configRequest(port, 'POST', '/internal/v1/config/pull') as {
+          ok?: boolean; mode?: string; defaultModel?: string | null; source?: string;
+          message?: string; attribution?: string | null;
+        };
+        console.log(`config pull: ${r.ok ? 'OK' : 'FAILED'} (mode=${r.mode})`);
+        console.log(`  default model: ${r.defaultModel ?? '-'}   source: ${r.source}`);
+        console.log(`  ${r.message ?? ''}`);
+        if (r.attribution) console.log(`  attribution: ${r.attribution}`);
+        if (!r.ok) process.exitCode = 1;
+        break;
+      }
+      case 'show':
+      case 'cache': {
+        // `config cache` 无子命令=show；`cache clear` 走下方分支
+        if (subcommand === 'cache' && (process.argv[4] ?? 'show') === 'clear') {
+          const r = await configRequest(port, 'DELETE', '/internal/v1/config/cache') as {
+            hadCache?: boolean; removedFiles?: string[];
+          };
+          console.log(`config cache clear: done (hadCache=${!!r.hadCache}, removed=${(r.removedFiles ?? []).length} file(s))`);
+          console.log('  梯语义验证：接 `config pull` 强制回 tier1；daemon env 现值待下次成功 pull 覆盖');
+          break;
+        }
+        const r = await configRequest(port, 'GET', '/internal/v1/config/show') as {
+          face?: string; hasCache?: boolean; fresh?: boolean; staleGrace?: boolean;
+          defaultModel?: string | null; effectiveModel?: string | null; effectiveSource?: string;
+          fetchedAt?: number | null; expiresAt?: number | null; refreshIntervalS?: number | null;
+          providerCount?: number; providers?: string[];
+          lastFetchAt?: number | null; lastFetchError?: string | null; lastAttribution?: string | null;
+        };
+        console.log(`config show (face=${r.face}):`);
+        console.log(`  effective model: ${r.effectiveModel ?? '-'}   source: ${r.effectiveSource}`);
+        if (r.hasCache) {
+          console.log(`  cache: ${r.fresh ? 'fresh' : r.staleGrace ? 'stale-grace (tier2.5)' : 'expired'}  fetched ${ts(r.fetchedAt)}  expires ${ts(r.expiresAt)}  refresh=${r.refreshIntervalS ?? '-'}s`);
+          console.log(`  providers(${r.providerCount}): ${(r.providers ?? []).join(', ') || '-'}`);
+        } else {
+          console.log('  cache: none (tier3 env 语义)');
+        }
+        console.log(`  last fetch: ${ts(r.lastFetchAt)}${r.lastFetchError ? `  error: ${r.lastFetchError}` : ''}${r.lastAttribution ? `  attribution: ${r.lastAttribution}` : ''}`);
+        break;
+      }
+      case 'verify': {
+        const r = await configRequest(port, 'POST', '/internal/v1/config/verify') as {
+          ok?: boolean; connectivity?: string; credentials?: string; decryptHealth?: string;
+          cardPresent?: boolean; defaultModel?: string | null; providers?: number; message?: string;
+        };
+        console.log(`config verify: ${r.ok ? 'HEALTHY' : 'UNHEALTHY'}`);
+        console.log(`  connectivity: ${r.connectivity}   credentials: ${r.credentials}   decrypt: ${r.decryptHealth}`);
+        console.log(`  card_present: ${r.cardPresent}   default model: ${r.defaultModel ?? '-'}   providers: ${r.providers ?? 0}`);
+        console.log(`  ${r.message ?? ''}`);
+        if (!r.ok) process.exitCode = 1;
+        break;
+      }
+      default:
+        console.error(`ERROR: unknown config subcommand '${subcommand}'. Usage: trilc config <pull|show|verify|cache show|cache clear>`);
+        process.exitCode = 1;
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/fetch failed|ECONNREFUSED/i.test(msg)) {
+      console.error(`ERROR: daemon 无响应（127.0.0.1:${port}）——先 \`trilc start\` 再试`);
+    } else {
+      console.error(`ERROR: ${msg}`);
+    }
+    process.exitCode = 1;
+  }
+}
+
 async function cronRequest(port: number, method: string, path: string, body?: unknown): Promise<unknown> {
   const url = `http://127.0.0.1:${port}${path}`;
   const options: RequestInit = {
@@ -1245,6 +1347,12 @@ const { command, port, serviceName, displayName, agent, resume, listSessions, pe
     case 'model':
       await runModelCommand(process.argv.slice(3), port);
       break;
+    case 'config': {
+      // LG-058 N4（方案 §5.1）：config pull|show|verify|cache show|cache clear
+      const subcommand = process.argv[3] ?? 'show';
+      await cmdConfig(subcommand, port);
+      break;
+    }
     case 'start':
       await cmdStart(port, permissionMode, allowRules, denyRules, addDirs, printMode);
       break;

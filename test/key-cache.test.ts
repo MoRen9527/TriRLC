@@ -13,6 +13,11 @@ import {
   getKeyCache,
   getKeyCacheStatus,
   stopKeyCache,
+  onKeyCacheUpdated,
+  refreshNow,
+  describeConfig,
+  verifyPull,
+  clearKeyCache,
   type KeyCache,
   type PullEntry,
 } from '../src/config/key-cache.js';
@@ -278,6 +283,205 @@ describe('LG-058 N3 config-cache 泛化', () => {
       } finally {
         stopKeyCache();
         restoreFetch();
+      }
+    } finally {
+      restore();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// ── LG-058 N4 CLI config 命令族（方案 §5.1）：daemon 内执行面四函数 ──
+
+describe('LG-058 N4 config 命令族（refreshNow/describeConfig/verifyPull/clearKeyCache）', () => {
+  it('refreshNow：手动拉取即时生效——cache 刷新+updated 回调照发+tier1 归因', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'trilc-kc-n4-'));
+    const restore = pinSandboxEnv();
+    let model = 'deepseek-v4-pro';
+    const restoreFetch = withMockFetch(async (input) => {
+      assert.ok(String(input).includes('/v1/config/cards/rlc?view=pull'));
+      return new Response(JSON.stringify({
+        object: 'config.card-pull', face: 'rlc', card_present: true,
+        default_model: model, entries: pullEntriesFixture(),
+        strategy: null, refresh_interval_s: 900,
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    try {
+      await initKeyCache('http://127.0.0.1:3333', dir, 'tok');
+      let updates = 0;
+      onKeyCacheUpdated(() => { updates += 1; });
+      try {
+        // 服务端翻转模型后手动 pull——daemon 侧即时生效（方案 §5.1 语义）
+        model = 'GLM-5.3';
+        const r = await refreshNow();
+        assert.equal(r.ok, true);
+        assert.equal(r.mode, 'full');
+        assert.equal(r.source, 'tier1-card');
+        assert.equal(r.defaultModel, 'GLM-5.3');
+        assert.equal(getKeyCache()?.defaultModel, 'GLM-5.3');
+        assert.equal(updates, 1, 'updated 回调照发（anchor③ 语义）');
+        // failed 分支：500 → last-known-good 仍在=梯归因 tier2
+        const restoreFail = withMockFetch(async () => new Response(JSON.stringify({ error: 'boom' }), { status: 500 }));
+        try {
+          const f = await refreshNow();
+          assert.equal(f.ok, false);
+          assert.equal(f.mode, 'failed');
+          assert.equal(f.source, 'tier2-cache');
+          assert.equal(f.defaultModel, 'GLM-5.3');
+          assert.match(f.message, /500/);
+        } finally {
+          restoreFail();
+        }
+      } finally {
+        stopKeyCache();
+      }
+    } finally {
+      restoreFetch();
+      restore();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('describeConfig 梯归因三态：tier3-env / tier2-cache-fresh / tier2-cache-stale-grace（7 天硬限=tier3）', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'trilc-kc-n4-'));
+    const restore = pinSandboxEnv();
+    try {
+      const bootFail = (): (() => void) => withMockFetch(async () => new Response('{}', { status: 500 }));
+      // 无 cache → tier3
+      let rf = bootFail();
+      try {
+        await initKeyCache('http://127.0.0.1:3333', dir, 'tok');
+        assert.equal(describeConfig().hasCache, false);
+        assert.equal(describeConfig().effectiveSource, 'tier3-env');
+      } finally { stopKeyCache(); rf(); }
+
+      // 新鲜 cache → tier2 fresh
+      writeFileSync(join(dir, 'config-cache.json'), JSON.stringify({
+        keys: { deepseek: { api_key: 'sk-x' } }, defaultModel: 'GLM-5.3', strategy: null,
+        refreshIntervalS: 900, fetchedAt: Date.now(), expiresAt: Date.now() + 3600_000,
+      }));
+      rf = bootFail();
+      try {
+        await initKeyCache('http://127.0.0.1:3333', dir, 'tok');
+        const d = describeConfig();
+        assert.equal(d.fresh, true);
+        assert.equal(d.effectiveSource, 'tier2-cache-fresh');
+        assert.equal(d.defaultModel, 'GLM-5.3');
+        assert.deepEqual(d.providers, ['deepseek']);
+      } finally { stopKeyCache(); rf(); }
+
+      // 过期+7 天宽限内 → tier2.5 stale-grace
+      writeFileSync(join(dir, 'config-cache.json'), JSON.stringify({
+        keys: { deepseek: { api_key: 'sk-x' } }, defaultModel: 'GLM-5.3', strategy: null,
+        refreshIntervalS: 900, fetchedAt: Date.now() - 48 * 3600_000, expiresAt: Date.now() - 24 * 3600_000,
+      }));
+      rf = bootFail();
+      try {
+        await initKeyCache('http://127.0.0.1:3333', dir, 'tok');
+        const d = describeConfig();
+        assert.equal(d.fresh, false);
+        assert.equal(d.staleGrace, true);
+        assert.equal(d.effectiveSource, 'tier2-cache-stale-grace');
+      } finally { stopKeyCache(); rf(); }
+
+      // 过期超 7 天硬限 → getKeyCache 丢弃 → tier3
+      writeFileSync(join(dir, 'config-cache.json'), JSON.stringify({
+        keys: { deepseek: { api_key: 'sk-x' } }, defaultModel: 'GLM-5.3', strategy: null,
+        refreshIntervalS: 900, fetchedAt: Date.now() - 9 * 24 * 3600_000, expiresAt: Date.now() - 8 * 24 * 3600_000,
+      }));
+      rf = bootFail();
+      try {
+        await initKeyCache('http://127.0.0.1:3333', dir, 'tok');
+        const d = describeConfig();
+        assert.equal(d.hasCache, false);
+        assert.equal(d.effectiveSource, 'tier3-env');
+      } finally { stopKeyCache(); rf(); }
+    } finally {
+      restore();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('verifyPull 三查试跑不落盘：健康卡形态（零状态写入）+model-relay（decrypt=n/a）+pull_denied', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'trilc-kc-n4-'));
+    const restore = pinSandboxEnv();
+    try {
+      const healthy = async (): Promise<Response> => new Response(JSON.stringify({
+        object: 'config.card-pull', face: 'rlc', card_present: true,
+        default_model: 'deepseek-v4-pro', entries: pullEntriesFixture(),
+        strategy: null, refresh_interval_s: 900,
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+      // boot 失败（无 cache 态）→ verify 走健康 mock
+      const rf = withMockFetch(async () => new Response('{}', { status: 500 }));
+      try {
+        await initKeyCache('http://127.0.0.1:3333', dir, 'tok');
+        // 形态①：健康卡
+        const rv1 = withMockFetch(healthy);
+        try {
+          const beforeSt = getKeyCacheStatus();
+          const v = await verifyPull();
+          assert.equal(v.ok, true);
+          assert.equal(v.connectivity, 'ok');
+          assert.equal(v.credentials, 'ok');
+          assert.equal(v.decryptHealth, 'ok');
+          assert.equal(v.cardPresent, true);
+          assert.ok(v.providers > 0);
+          assert.equal(getKeyCacheStatus().lastFetchAt, beforeSt.lastFetchAt, 'verify 零状态写入（lastFetch 不动）');
+          assert.ok(!existsSync(join(dir, 'config-cache.json')), 'verify 不落盘');
+        } finally { rv1(); }
+        // 形态②：model-relay
+        const rv2 = withMockFetch(async () => new Response(JSON.stringify({
+          object: 'config.card-pull', face: 'rlc', card_present: false,
+          default_model: 'GLM-5.3', default_model_source: 'policy',
+          entries: {}, strategy: null, refresh_interval_s: 900,
+        }), { status: 200, headers: { 'content-type': 'application/json' } }));
+        try {
+          const v = await verifyPull();
+          assert.equal(v.ok, true);
+          assert.equal(v.cardPresent, false);
+          assert.equal(v.decryptHealth, 'n/a');
+          assert.equal(v.defaultModel, 'GLM-5.3');
+        } finally { rv2(); }
+        // 形态③：pull_denied
+        const rv3 = withMockFetch(async () => new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 }));
+        try {
+          const v = await verifyPull();
+          assert.equal(v.ok, false);
+          assert.equal(v.connectivity, 'ok', '401=连通正常凭据被拒');
+          assert.equal(v.credentials, 'denied');
+        } finally { rv3(); }
+      } finally {
+        rf();
+        stopKeyCache();
+      }
+    } finally {
+      restore();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('clearKeyCache：canonical+legacy 双清（防 legacy 复活）+hadCache 读数', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'trilc-kc-n4-'));
+    const restore = pinSandboxEnv();
+    try {
+      // 先落 legacy 旧载体（模拟迁移前机器）
+      writeFileSync(join(dir, 'keys.json'), JSON.stringify({
+        keys: { deepseek: { api_key: 'sk-legacy' } }, defaultModel: 'old', strategy: null,
+        refreshIntervalS: 900, fetchedAt: Date.now(), expiresAt: Date.now() + 3600_000,
+      }));
+      const rf = withMockFetch(async () => new Response('{}', { status: 500 }));
+      try {
+        await initKeyCache('http://127.0.0.1:3333', dir, 'tok');
+        assert.equal(getKeyCache()?.defaultModel, 'old', 'legacy fallback 在位');
+        const r = clearKeyCache();
+        assert.equal(r.cleared, true);
+        assert.equal(r.hadCache, true);
+        assert.ok(r.removedFiles.some((p) => p.endsWith('keys.json')), 'legacy 载体同清');
+        assert.equal(getKeyCache(), null, '清除后 tier3');
+        assert.ok(!existsSync(join(dir, 'keys.json')));
+      } finally {
+        rf();
+        stopKeyCache();
       }
     } finally {
       restore();

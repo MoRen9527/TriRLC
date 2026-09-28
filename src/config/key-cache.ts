@@ -24,7 +24,7 @@
 // Rollback: TRIMODEL_KEY_STORAGE_MODE=s3 → plaintext mode.
 
 import { join } from 'node:path';
-import { mkdirSync, readFileSync, writeFileSync, chmodSync, existsSync, copyFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, chmodSync, existsSync, copyFileSync, rmSync } from 'node:fs';
 import { encrypt, decrypt, isEncryptedFormat, canDeriveKey } from './key-encryptor.js';
 
 // ── Types ──
@@ -220,6 +220,9 @@ let _refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let _storage: KeyStorage | null = null;
 let _apiUrl = '';
 let _apiToken: string | undefined;
+// LG-058 N4：cache 清除面（config cache clear）需知文件落点——initKeyCache 时登记。
+let _cacheFilePath = '';
+let _legacyCacheFilePath = '';
 
 // ── Fetch status (r19-gate A1: 401 诊断面，供 init-selfcheck trimodel 探测) ──
 
@@ -472,6 +475,8 @@ export async function initKeyCache(apiUrl: string, dataDir: string, apiToken?: s
   _apiToken = process.env.TRIMODEL_FACE_TOKEN ?? apiToken;
   const filePath = getKeyCacheFilePath(dataDir);
   const legacyFilePath = getLegacyKeyCacheFilePath(dataDir);
+  _cacheFilePath = filePath; // N4：clear 面登记（storage 接口无路径暴露，模块级直存）
+  _legacyCacheFilePath = legacyFilePath;
 
   // Phase 2: Respect TRIMODEL_KEY_STORAGE_MODE for rollback
   const storageMode = process.env.TRIMODEL_KEY_STORAGE_MODE ?? 's2';
@@ -562,7 +567,10 @@ function startRefreshTimer(apiUrl: string, intervalS: number, apiToken?: string)
   }, staggerMs);
 }
 
-async function doRefresh(apiUrl: string, apiToken?: string): Promise<void> {
+/** N4：刷新路径结果形（周期刷新忽略返回值；config pull 手动面取它渲染）。 */
+type RefreshMode = 'full' | 'model-relay' | 'failed';
+
+async function doRefresh(apiUrl: string, apiToken?: string): Promise<RefreshMode> {
   const pull = await fetchConfigFromCardApi(apiUrl, apiToken);
   if (pull.ok && pull.modelRelayOnly) {
     // 模型维中继（同 initKeyCache 分支；刷新路径须触发 updated 回调——
@@ -585,7 +593,7 @@ async function doRefresh(apiUrl: string, apiToken?: string): Promise<void> {
         console.warn('[trilc:keys] onKeyCacheUpdated callback failed:', err instanceof Error ? err.message : String(err));
       }
     }
-    return;
+    return 'model-relay';
   }
   if (!pull.ok) {
     recordFetchFailure(new Error(pull.message), pull.attribution);
@@ -593,7 +601,7 @@ async function doRefresh(apiUrl: string, apiToken?: string): Promise<void> {
       void reportCardStatus('failed', 'pull_denied');
     }
     console.warn(`[trilc:keys] refresh failed (attribution: ${pull.attribution ?? 'network'}): ${pull.message}`);
-    return;
+    return 'failed';
   }
   _keyCache = {
     keys: pull.keys,
@@ -615,6 +623,185 @@ async function doRefresh(apiUrl: string, apiToken?: string): Promise<void> {
       console.warn('[trilc:keys] onKeyCacheUpdated callback failed:', err instanceof Error ? err.message : String(err));
     }
   }
+  return 'full';
+}
+
+// ── CLI config 命令族（LG-058 N4，方案 §5.1）──
+// 实现路径注：四命令全部在 daemon 进程内执行、CLI 经 /internal/v1/config/*
+// 触发——「即时生效」要求刷新与 env apply 落在 daemon 运行态（CLI 独立进程
+// 拉取触达不了 daemon 持有的 _keyCache/env），方案 §5.2「同一 API 面两个消
+// 费端」=daemon 即 TriModel API 的消费端、CLI 为其触发器。CLI 不开写面
+// （方案 §5.2 差异①）：本节四函数零卡写面，status 回写走既有 reportCardStatus。
+
+/** config pull 读数（生效读数+来源归因，方案 §5.1 输出语义）。 */
+export interface ManualPullResult {
+  ok: boolean;
+  mode: RefreshMode;
+  defaultModel: string | null;
+  source: 'tier1-card' | 'tier2-cache' | 'tier3-env';
+  message: string;
+  attribution: PullAttributionCode | null;
+}
+
+/** 手动拉取+即时生效（daemon 进程内；与周期刷新同路径 doRefresh）。 */
+export async function refreshNow(): Promise<ManualPullResult> {
+  if (!_apiUrl) {
+    return { ok: false, mode: 'failed', defaultModel: null, source: 'tier3-env',
+      message: 'key cache not initialized (daemon boot incomplete)', attribution: null };
+  }
+  const mode = await doRefresh(_apiUrl, _apiToken);
+  const cache = getKeyCache();
+  const st = getKeyCacheStatus();
+  if (mode === 'failed') {
+    return {
+      ok: false, mode: 'failed',
+      defaultModel: cache?.defaultModel ?? null,
+      source: cache ? 'tier2-cache' : 'tier3-env',
+      message: st.lastFetchError ?? 'pull failed',
+      attribution: st.lastAttribution,
+    };
+  }
+  return {
+    ok: true, mode,
+    defaultModel: cache?.defaultModel ?? null,
+    source: 'tier1-card',
+    message: mode === 'model-relay'
+      ? 'model-dimension relay applied (card absent server-side; keys preserved)'
+      : 'full pull applied (keys+default model refreshed)',
+    attribution: null,
+  };
+}
+
+/** config show / cache show 读数投影（零密钥：provider 名单+计数，SEC 纪律）。 */
+export interface ConfigShowReading {
+  face: string;
+  hasCache: boolean;
+  /** TTL 内（未过期）。 */
+  fresh: boolean;
+  /** 过期但 7 天宽限内（getKeyCache tier2.5 stale 语义）。 */
+  staleGrace: boolean;
+  defaultModel: string | null;
+  effectiveModel: string | null;
+  effectiveSource: 'tier2-cache-fresh' | 'tier2-cache-stale-grace' | 'tier3-env';
+  fetchedAt: number | null;
+  expiresAt: number | null;
+  refreshIntervalS: number | null;
+  providerCount: number;
+  providers: string[];
+  strategy: PullStrategySummary | null;
+  lastFetchAt: number | null;
+  lastFetchError: string | null;
+  lastAttribution: PullAttributionCode | null;
+}
+
+export function describeConfig(): ConfigShowReading {
+  const raw = _keyCache;
+  const cache = getKeyCache(); // 7 天硬限丢弃语义内嵌
+  const now = Date.now();
+  const fresh = !!raw && now <= raw.expiresAt;
+  return {
+    face: FACE_ID,
+    hasCache: !!cache,
+    fresh,
+    staleGrace: !!cache && !fresh,
+    defaultModel: cache?.defaultModel ?? null,
+    effectiveModel: cache?.defaultModel ?? null,
+    effectiveSource: cache ? (fresh ? 'tier2-cache-fresh' : 'tier2-cache-stale-grace') : 'tier3-env',
+    fetchedAt: raw?.fetchedAt ?? null,
+    expiresAt: raw?.expiresAt ?? null,
+    refreshIntervalS: raw?.refreshIntervalS ?? null,
+    providerCount: cache ? Object.keys(cache.keys).length : 0,
+    providers: cache ? Object.keys(cache.keys) : [],
+    strategy: cache?.strategy ?? null,
+    lastFetchAt: _lastFetchAt,
+    lastFetchError: _lastFetchError,
+    lastAttribution: _lastAttribution,
+  };
+}
+
+/** config verify 三查报告（连通+凭据+解密健康；拉取试跑不落盘不回写，方案 §5.1）。 */
+export interface ConfigVerifyReport {
+  ok: boolean;
+  connectivity: 'ok' | 'fail';
+  credentials: 'ok' | 'denied' | 'absent';
+  /** 条目解密健康=服务端已解密条目可聚合（消费端 cache 解密走 裁1(乙) 面）；
+   * model-relay（卡缺席）=n/a。 */
+  decryptHealth: 'ok' | 'n/a' | 'fail';
+  cardPresent: boolean;
+  defaultModel: string | null;
+  providers: number;
+  refreshIntervalS: number | null;
+  message: string;
+}
+
+export async function verifyPull(): Promise<ConfigVerifyReport> {
+  if (!_apiUrl) {
+    return { ok: false, connectivity: 'fail', credentials: 'absent', decryptHealth: 'n/a',
+      cardPresent: false, defaultModel: null, providers: 0, refreshIntervalS: null,
+      message: 'key cache not initialized (daemon boot incomplete)' };
+  }
+  // 试跑：仅 fetch+解析，零状态写入（_keyCache/_storage/lastFetch*/status 全不触）
+  const pull = await fetchConfigFromCardApi(_apiUrl, _apiToken);
+  if (!pull.ok) {
+    const denied = pull.attribution === 'pull_denied';
+    return {
+      ok: false,
+      connectivity: denied ? 'ok' : 'fail',
+      credentials: denied ? 'denied' : 'absent',
+      decryptHealth: 'n/a',
+      cardPresent: !denied,
+      defaultModel: null,
+      providers: 0,
+      refreshIntervalS: null,
+      message: pull.message,
+    };
+  }
+  const entryCount = Object.keys(pull.keys).length;
+  return {
+    ok: true,
+    connectivity: 'ok',
+    credentials: 'ok',
+    decryptHealth: pull.modelRelayOnly ? 'n/a' : (entryCount > 0 ? 'ok' : 'fail'),
+    cardPresent: !pull.modelRelayOnly,
+    defaultModel: pull.defaultModel,
+    providers: entryCount,
+    refreshIntervalS: pull.refreshIntervalS,
+    message: pull.modelRelayOnly
+      ? 'connectivity ok; model-dimension relay healthy (card absent server-side)'
+      : entryCount > 0
+        ? 'connectivity+credentials+decrypt all healthy'
+        : 'connectivity ok but zero decryptable entries',
+  };
+}
+
+/** config cache clear 读数。 */
+export interface CacheClearResult {
+  cleared: boolean;
+  hadCache: boolean;
+  removedFiles: string[];
+}
+
+/**
+ * last-known-good 清除（方案 §5.1：清=强制回 tier1/tier3 验证梯语义）。
+ * canonical+legacy 双清——防 legacy keys.json 在下次 boot 复活已清 cache
+ * （read fallback 会读它）。env 现值不回滚（无 unapply 语义），下次成功
+ * pull 自然覆盖。
+ */
+export function clearKeyCache(): CacheClearResult {
+  const hadCache = !!_keyCache;
+  _keyCache = null;
+  const removed: string[] = [];
+  for (const p of [_cacheFilePath, _legacyCacheFilePath]) {
+    if (p && existsSync(p)) {
+      try {
+        rmSync(p, { force: true });
+        removed.push(p);
+      } catch (err) {
+        console.warn(`[trilc:keys] cache clear failed for ${p}:`, err instanceof Error ? err.message : String(err));
+      }
+    }
+  }
+  return { cleared: true, hadCache, removedFiles: removed };
 }
 
 export function stopKeyCache(): void {
@@ -627,4 +814,6 @@ export function stopKeyCache(): void {
   _storage = null;
   _apiUrl = '';
   _apiToken = undefined;
+  _cacheFilePath = '';
+  _legacyCacheFilePath = '';
 }
