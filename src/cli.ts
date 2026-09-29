@@ -865,9 +865,15 @@ async function cmdConfig(subcommand: string, port: number): Promise<void> {
 
 async function cronRequest(port: number, method: string, path: string, body?: unknown): Promise<unknown> {
   const url = `http://127.0.0.1:${port}${path}`;
+  // F-2 同漏即同修（CEO 2026-09-29 22:05 直令；镜像分叉防复踩——本函数与
+  // TriMLC cronRequest 逐字同构同漏，勘钉 2026-09-29 上午在案）：与 configRequest
+  // 同构带 X-Internal-Token，daemon /internal/v1/cron/* 门 fail-closed。
+  const token = process.env.TRILC_INTERNAL_TOKEN ?? '';
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (token) headers['x-internal-token'] = token;
   const options: RequestInit = {
     method,
-    headers: { 'content-type': 'application/json' },
+    headers,
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   };
   const res = await fetch(url, options);
