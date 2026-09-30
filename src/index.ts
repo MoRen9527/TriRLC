@@ -1,7 +1,7 @@
 import { readFileSync, unlinkSync } from 'node:fs';
 import { readEnv } from './config/env.js';
 import { LocalRuntimeDaemon } from './runtime/daemon.js';
-import { createTriLCApp } from './server/app.js';
+import { createTriRLCApp } from './server/app.js';
 import { PID_FILE, pidFileFor } from './paths.js';
 // REQ-018: daemon owns its PID file — register after listen, unregister on exit.
 import { registerPid, unregisterPid } from './pidfile.js';
@@ -131,7 +131,7 @@ async function main(): Promise<void> {
     enforceProjectIsolation: (projectRoot: string, dbPath: string) => enforceKnowledgeIsolation(projectRoot, dbPath),
   });
 
-  const app = createTriLCApp(env);
+  const app = createTriRLCApp(env);
   await app.start();
 
   // REQ-018: the daemon registers its own PID after the server is listening.

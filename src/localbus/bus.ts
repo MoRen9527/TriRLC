@@ -1,4 +1,4 @@
-// ── TriLC Localbus ──
+// ── TriRLC Localbus ──
 // In-process typed EventEmitter bus for local module decoupling.
 // Phase 1: EventEmitter memory bus (CTO-008-M §3.4.2).
 // Phase 2: upgrade to Unix Domain Socket / Named Pipe.

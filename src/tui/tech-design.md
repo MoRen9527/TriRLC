@@ -1,4 +1,4 @@
-# TriLC TUI — T1 MVP 技术设计
+# TriRLC TUI — T1 MVP 技术设计
 
 版本：V0.1
 日期：2026-07-24
@@ -16,9 +16,9 @@
 
 ## 0. 前置声明
 
-- **吸收方案**：任务描述称 absorption-plan.md 联审已通过，但经全仓搜索，`TriLC/` 及 `TriCompany/` 下均未找到该文件。本设计基于 vendor 基线实际代码状态进行独立技术评估。若吸收方案后续到位且存在分歧，以本设计为准并标注差异。
-- **vendor 基线**：`TriLC/vendor/claude-code-tui/` 已就位，共 156 文件（ink/ 98 + components/ 57 + ink.ts 1）。
-- **工作路径**：所有 TUI 代码写入 `TriLC/src/tui/`，不进入 `TriMetaverse/` 项目根目录。
+- **吸收方案**：任务描述称 absorption-plan.md 联审已通过，但经全仓搜索，`TriRLC/` 及 `TriCompany/` 下均未找到该文件。本设计基于 vendor 基线实际代码状态进行独立技术评估。若吸收方案后续到位且存在分歧，以本设计为准并标注差异。
+- **vendor 基线**：`TriRLC/vendor/claude-code-tui/` 已就位，共 156 文件（ink/ 98 + components/ 57 + ink.ts 1）。
+- **工作路径**：所有 TUI 代码写入 `TriRLC/src/tui/`，不进入 `TriMetaverse/` 项目根目录。
 
 ---
 
@@ -522,7 +522,7 @@ trilc chat
 ## 7. 目录结构
 
 ```
-TriLC/
+TriRLC/
 ├── src/
 │   ├── tui/
 │   │   ├── tech-design.md          # ★ 本文件
@@ -629,11 +629,11 @@ P1.3  创建 src/tui/ink/shims.ts（集中 shim）
 P1.4  修改所有 CC import 路径为本地 shim
 P1.5  安装 npm 依赖（react, react-reconciler, yoga-layout-prebuilt 等）
 P1.6  修改 tsconfig.json（jsx: "react-jsx"）
-P1.7  ★ 冒烟验证：渲染 <Box><Text>Hello TriLC</Text></Box>
+P1.7  ★ 冒烟验证：渲染 <Box><Text>Hello TriRLC</Text></Box>
 P1.8  修复 yoga-layout-prebuilt 适配问题（如有）
 ```
 
-**门禁**：`npm run check` 无类型错误 + 终端输出 "Hello TriLC"
+**门禁**：`npm run check` 无类型错误 + 终端输出 "Hello TriRLC"
 
 ### Phase 2：核心组件
 
@@ -732,10 +732,10 @@ P3.3  端到端测试：trilc chat → daemon auto-start → 输入消息 → SS
 
 | 依据 | 路径 |
 |---|---|
-| Ink 引擎核心 | `TriLC/vendor/claude-code-tui/ink/root.ts`, `ink.tsx`, `reconciler.ts`, `renderer.ts`, `dom.ts`, `screen.ts`, `output.ts`, `frame.ts` |
-| Yoga 布局适配器 | `TriLC/vendor/claude-code-tui/ink/layout/yoga.ts`, `engine.ts`, `node.ts` |
-| ThemeProvider 剥离证明 | `TriLC/vendor/claude-code-tui/ink.ts`（仅做 ThemeProvider 包裹） |
-| Daemon API | `TriLC/src/server/openai-stream.ts`（SSE 格式化），`TriLC/src/server/app.ts`（路由） |
-| CLI 入口 | `TriLC/src/cli.ts`（现有 start/stop/status/run 命令） |
-| Code Registry | `TriLC/docs/registry/code-state.md` |
-| Package 基线 | `TriLC/package.json`, `TriLC/tsconfig.json` |
+| Ink 引擎核心 | `TriRLC/vendor/claude-code-tui/ink/root.ts`, `ink.tsx`, `reconciler.ts`, `renderer.ts`, `dom.ts`, `screen.ts`, `output.ts`, `frame.ts` |
+| Yoga 布局适配器 | `TriRLC/vendor/claude-code-tui/ink/layout/yoga.ts`, `engine.ts`, `node.ts` |
+| ThemeProvider 剥离证明 | `TriRLC/vendor/claude-code-tui/ink.ts`（仅做 ThemeProvider 包裹） |
+| Daemon API | `TriRLC/src/server/openai-stream.ts`（SSE 格式化），`TriRLC/src/server/app.ts`（路由） |
+| CLI 入口 | `TriRLC/src/cli.ts`（现有 start/stop/status/run 命令） |
+| Code Registry | `TriRLC/docs/registry/code-state.md` |
+| Package 基线 | `TriRLC/package.json`, `TriRLC/tsconfig.json` |

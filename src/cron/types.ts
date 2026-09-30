@@ -1,4 +1,4 @@
-// ── TriLC Cron Types ──
+// ── TriRLC Cron Types ──
 // Shared type definitions for the cron engine.
 // Phase 3: CronJobPatch, ExecutionLogEntry added.
 

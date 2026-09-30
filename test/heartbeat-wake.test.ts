@@ -1,4 +1,4 @@
-// ── TriLC Heartbeat Wake Tests ──
+// ── TriRLC Heartbeat Wake Tests ──
 // Covers: coalescing, priority preemption, retry cooldown,
 // timer preemption, handler disposer generation guard, enable/disable toggle.
 //
@@ -11,11 +11,11 @@ import { afterEach, beforeEach, describe, it, mock } from "node:test";
 import {
   createHeartbeatWake,
   type HeartbeatRunResult,
-  type TriLCHeartbeatWake,
+  type TriRLCHeartbeatWake,
 } from "../src/heartbeat/heartbeat-wake.js";
 
-describe("TriLCHeartbeatWake", () => {
-  let wake: TriLCHeartbeatWake;
+describe("TriRLCHeartbeatWake", () => {
+  let wake: TriRLCHeartbeatWake;
 
   beforeEach(() => {
     wake = createHeartbeatWake();

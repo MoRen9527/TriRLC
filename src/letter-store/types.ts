@@ -1,4 +1,4 @@
-// ── TriLC Letter Store Types ──
+// ── TriRLC Letter Store Types ──
 // LG-026 P1 数据层 — 信件信封与台账模型。
 // 依据：lg-026-business-lead-daemon-design.md §二③ +
 //       lg026-cto-joint-review-opinion.md ③ + trimlc-channel-daemon-spec.md §8.6。

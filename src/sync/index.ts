@@ -1,7 +1,7 @@
-// ── TriLC Sync Engine Index ──
-// 会话云同步：TriLC → TriMC 单向推送（Phase 1）
+// ── TriRLC Sync Engine Index ──
+// 会话云同步：TriRLC → TriMMC 单向推送（Phase 1）
 
-export { syncSessionToTriMC, syncPendingSessions } from './sync-engine.js';
+export { syncSessionToTriMMC, syncPendingSessions } from './sync-engine.js';
 export type { SyncEngineDeps } from './sync-engine.js';
 export { buildSyncPayload } from './payload-builder.js';
 export type { SyncMessageInput } from './payload-builder.js';

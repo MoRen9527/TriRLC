@@ -166,7 +166,7 @@ describe('2.5: ConnectionManager degraded 完善', () => {
   });
 
   it('degraded 日志 [trilc:conn] 与模型降级 [trilc:model] 独立不混淆 (C13 边界)', () => {
-    // C13 已验证: [trilc:conn] 用于 TriMC 连接状态
+    // C13 已验证: [trilc:conn] 用于 TriMMC 连接状态
     // [trilc:model] 用于模型 provider 错误
     // 2.5 不改变此行为
     assert.ok(true, 'C13 边界: [trilc:conn] vs [trilc:model] 不混淆 (C12/C13 已验证)');

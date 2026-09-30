@@ -359,7 +359,7 @@ Edit this file to add project-specific instructions.
             } },
         '/compact': { desc: 'Compact context (summarize history)', handler: async () => {
                 // P2-Batch2-#1: CC-fidelity compact with real summarization
-                // Uses TriLC compact service (CC prompt.ts + compact.ts adapted)
+                // Uses TriRLC compact service (CC prompt.ts + compact.ts adapted)
                 try {
                     const { compactConversation, createCompactedMessages } = await import('../services/compact/index.js');
                     const apiMessages = messages.map(m => ({ role: m.role, content: m.content }));

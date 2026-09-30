@@ -1,4 +1,4 @@
-// ── TriLC Cron Timer ──
+// ── TriRLC Cron Timer ──
 // Phase 3: timer management, missed-job catchup, and timeout execution.
 // Pattern adapted from vendor/openclaw/src/cron/service/timer.ts.
 //

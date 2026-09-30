@@ -26,12 +26,12 @@ async function buildApp(dataDir: string) {
   process.env.TRILC_DATA_DIR = dataDir;
   process.env.TRILC_PORT = '0';
   process.env.TRILC_PROJECT_ROOT = dataDir;
-  const { createTriLCApp } = await import('../../src/server/app.js');
+  const { createTriRLCApp } = await import('../../src/server/app.js');
   const { readEnv } = await import('../../src/config/env.js');
   const env = readEnv();
   env.port = 0;
   env.trimodelApiUrl = 'http://127.0.0.1:1';
-  return createTriLCApp(env);
+  return createTriRLCApp(env);
 }
 
 describe('LG-033 connection-state.json 持久化链', () => {

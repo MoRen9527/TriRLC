@@ -1,4 +1,4 @@
-// ── TriLC TodoWrite tool (P2-Batch1-#2 + P2-Batch2 CC-fidelity) ──
+// ── TriRLC TodoWrite tool (P2-Batch1-#2 + P2-Batch2 CC-fidelity) ──
 // CC-equivalent todo task manager. Supports TaskCreate/TaskList/TaskUpdate operations.
 // Allows AI assistants to create, list, and update todo tasks.
 // P2-Batch2: Added verification nudge from CC TodoWriteTool.ts (当3+任务全完成且无验证步骤时提示)
@@ -245,7 +245,7 @@ export function registerTaskTools(): void {
             priority: {
               type: 'string',
               enum: ['low', 'medium', 'high'],
-              description: 'Task priority (TriLC extension, not in CC)',
+              description: 'Task priority (TriRLC extension, not in CC)',
             },
             blocks: {
               type: 'array',

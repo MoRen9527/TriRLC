@@ -1,5 +1,5 @@
-// ── Sync Bundle 契约与纯函数（生成端，TriLC 侧独立实现）──
-// init-collab-i4-five-dim-sync i4-1 拆解 §一 schema 契约（TriLC 侧）：
+// ── Sync Bundle 契约与纯函数（生成端，TriRLC 侧独立实现）──
+// init-collab-i4-five-dim-sync i4-1 拆解 §一 schema 契约（TriRLC 侧）：
 //   校验（递归密钥字段拒绝 + keys 白名单）/ 指纹 / 单调性——纯函数可单测，
 //   不做任何 I/O。收集/生成/写/commit/push 链在 init-sync.ts。
 //
@@ -13,7 +13,7 @@
 //     生成」判定恒失效（§一.4 矩阵语义 = 内容重放检测）。
 //   - generatedAt 单调：max(now, 现存 bundle.generatedAt + 1ms)。
 //
-// TriMC 接收侧 src/config-sync/types.ts 独立实现同一契约（跨仓共享包升级挂后续）。
+// TriMMC 接收侧 src/config-sync/types.ts 独立实现同一契约（跨仓共享包升级挂后续）。
 
 import { createHash } from 'node:crypto';
 
@@ -388,7 +388,7 @@ export function assertNoSecretMaterial(serialized: string): void {
 }
 
 // ── Phase D 契约冻结（§六：L1-L4 协同确认；实现待 I3 收官解锁信号）──
-// 本段仅类型契约——端点实现归 Phase D（i4-2 内序：TriMC 侧先行、确认卡后接）。
+// 本段仅类型契约——端点实现归 Phase D（i4-2 内序：TriMMC 侧先行、确认卡后接）。
 
 export type ConfirmCheckStatus = 'ok' | 'error' | 'pending';
 

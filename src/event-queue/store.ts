@@ -1,4 +1,4 @@
-// ── TriLC Event Queue SQLite Store ──
+// ── TriRLC Event Queue SQLite Store ──
 // Persists offline events using Node 22's built-in node:sqlite.
 // CTO-008-M §3.2.3 schema.
 

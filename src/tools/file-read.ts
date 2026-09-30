@@ -1,4 +1,4 @@
-// ── TriLC Read tool ──
+// ── TriRLC Read tool ──
 // CC-equivalent file reader. Reads text files with offset/limit support.
 // Returns content in cat -n format: right-justified 6-digit line number + tab.
 

@@ -1,7 +1,7 @@
 // ── Agent Contract Resolver ──
 // 读取 .contract.yaml（路径索引）→ 加载五件套 → 组装 system prompt
 // 
-// 用途: TriLC 启动时加载所有 agent 定义，运行时根据 agent_id 注入对应身份
+// 用途: TriRLC 启动时加载所有 agent 定义，运行时根据 agent_id 注入对应身份
 
 import { readFileSync, existsSync, watch } from 'fs';
 import { resolve } from 'path';

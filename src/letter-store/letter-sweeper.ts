@@ -1,4 +1,4 @@
-// ── TriLC Letter Sweeper（LG-026-P3-R3/R4）──
+// ── TriRLC Letter Sweeper（LG-026-P3-R3/R4）──
 // 定时扫描信箱超时/到期件，驱动 L3 急件抢占升级链与 ttl 到期处理。
 // 落法=session-reaper 同款内部 sweep（setInterval+unref）——不入用户 cron jobs
 // CRUD 面（内部职责不暴露给 job 列表/删除面），CTO 派工令「cron 面挂定时扫描」

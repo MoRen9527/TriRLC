@@ -1,4 +1,4 @@
-// ── TriLC Write tool ──
+// ── TriRLC Write tool ──
 // CC-equivalent file writer. Creates or overwrites files.
 // Creates parent directories automatically.
 

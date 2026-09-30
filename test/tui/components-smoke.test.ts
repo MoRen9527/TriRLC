@@ -151,7 +151,7 @@ describe('V-004 CJK width', () => {
   it('Mixed Chinese and English — no throw', () => {
     assert.doesNotThrow(() => {
       renderElement(React.createElement(Markdown, {
-        content: 'TriLC终端TUI测试V1.0 — 中英混排测试'
+        content: 'TriRLC终端TUI测试V1.0 — 中英混排测试'
       }));
     });
   });

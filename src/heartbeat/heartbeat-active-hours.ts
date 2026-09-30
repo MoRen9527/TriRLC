@@ -1,4 +1,4 @@
-// ── TriLC Heartbeat Active Hours ──
+// ── TriRLC Heartbeat Active Hours ──
 // Timezone-aware active/quiet hours configuration for heartbeat scheduling.
 //
 // MVP default: no restriction (all hours active). Users can configure quiet

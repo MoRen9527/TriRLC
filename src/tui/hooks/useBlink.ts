@@ -1,6 +1,6 @@
 // ── useBlink hook (CC-aligned: returns [ref, isVisible]) ──
 // Based on CC 2.1.88 vendor/cc-tui/hooks/useBlink.ts
-// Adapted: uses setInterval (no ClockContext in TriLC Ink setup),
+// Adapted: uses setInterval (no ClockContext in TriRLC Ink setup),
 //           but returns [ref, isVisible] matching CC API signature.
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { DOMElement } from '../fork.js';

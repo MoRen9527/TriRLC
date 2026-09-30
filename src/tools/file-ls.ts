@@ -1,4 +1,4 @@
-// ── TriLC LS tool (P2-Batch1-#7) ──
+// ── TriRLC LS tool (P2-Batch1-#7) ──
 // CC-equivalent directory listing tool. Lists files and directories with formatting options.
 // Supports detailed view with permissions, sizes, and timestamps.
 

@@ -1,6 +1,6 @@
 // ── Local Node (agent-core powered) ──
 // Programmatic agent execution entry point — mirrors the HTTP server's
-// agentLoop integration but as a direct API for other TriLC modules.
+// agentLoop integration but as a direct API for other TriRLC modules.
 // Uses @tricompany/agent-core for loop, tools, and permissions.
 
 import {
@@ -10,7 +10,7 @@ import {
   type AgentEvent,
   validateMessage,
 } from '@tricompany/agent-core';
-import type { TriLCEnv } from '../config/env.js';
+import type { TriRLCEnv } from '../config/env.js';
 import type { Message } from 'trimodel';
 
 export interface LocalNodeRunOptions {
@@ -24,7 +24,7 @@ export interface LocalNodeRunOptions {
 export class LocalNode {
   private state: 'idle' | 'running' = 'idle';
 
-  constructor(private readonly env: TriLCEnv) {}
+  constructor(private readonly env: TriRLCEnv) {}
 
   // ── Programmatic agent execution ──
   async *runAgent(opts: LocalNodeRunOptions): AsyncGenerator<AgentEvent> {

@@ -1,8 +1,8 @@
-// ── TriLC Cloud Sync Engine ──
-// Core sync engine for TriLC → TriMC single-direction session sync (Phase 1).
+// ── TriRLC Cloud Sync Engine ──
+// Core sync engine for TriRLC → TriMMC single-direction session sync (Phase 1).
 //
 // Responsibilities:
-//   1. Single session sync: syncSessionToTriMC()
+//   1. Single session sync: syncSessionToTriMMC()
 //   2. Batch sync: syncPendingSessions()
 //   3. State machine gate: sync_status transition guard
 //   4. 409 dedup handling
@@ -44,7 +44,7 @@ export interface SyncEngineDeps {
 }
 
 /**
- * 单会话同步到 TriMC。
+ * 单会话同步到 TriMMC。
  *
  * 状态机门禁：
  *   - 仅接受 status 为 'pending' 或 'error' 的会话
@@ -52,7 +52,7 @@ export interface SyncEngineDeps {
  *   - 'synced' 或 'local' 跳过（前者已同步，后者无新消息）
  *
  * 409 Conflict 处理：
- *   - TriMC 返回 409 → 说明 (nodeId, localSessionId) 已存在
+ *   - TriMMC 返回 409 → 说明 (nodeId, localSessionId) 已存在
  *   - 使用 existingCloudSessionId 标记本地会话为 'synced'
  *   - 返回 ok: true（视为成功）
  *
@@ -61,7 +61,7 @@ export interface SyncEngineDeps {
  *   - 4xx（除 409）→ 不重试，直接标记 error
  *   - 全部重试耗尽 → 标记 error，返回 ok: false
  */
-export async function syncSessionToTriMC(
+export async function syncSessionToTriMMC(
   sessionId: string,
   deps: SyncEngineDeps,
 ): Promise<SyncResult> {
@@ -164,7 +164,7 @@ export async function syncSessionToTriMC(
  * 批量同步所有 pending 会话。
  * 用于用户手动触发"全部同步"或定时后台任务。
  *
- * 顺序执行（避免并发压 TriMC）。
+ * 顺序执行（避免并发压 TriMMC）。
  */
 export async function syncPendingSessions(
   deps: SyncEngineDeps,
@@ -176,9 +176,9 @@ export async function syncPendingSessions(
   let synced = 0;
   let failed = 0;
 
-  // 顺序执行（避免并发压 TriMC）
+  // 顺序执行（避免并发压 TriMMC）
   for (const session of pending) {
-    const result = await syncSessionToTriMC(session.id, deps);
+    const result = await syncSessionToTriMMC(session.id, deps);
     results.push({
       sessionId: session.id,
       ok: result.ok,

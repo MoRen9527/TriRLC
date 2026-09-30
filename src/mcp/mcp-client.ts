@@ -3,7 +3,7 @@
 // Handles: stdio + SSE transport, tool listing, tool call proxying.
 //
 // CC equivalent: services/mcp/client.ts (~1500 lines) — stripped to ~200
-// lines for TriLC MVP. No OAuth, no resource/prompt support, no LRU cache.
+// lines for TriRLC MVP. No OAuth, no resource/prompt support, no LRU cache.
 //
 // Architecture:
 //   McpClientManager

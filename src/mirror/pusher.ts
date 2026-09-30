@@ -1,5 +1,5 @@
-// ── TriLC TaskMirrorPusher ──
-// S7: Event-driven task state push to TriMC mirror endpoint.
+// ── TriRLC TaskMirrorPusher ──
+// S7: Event-driven task state push to TriMMC mirror endpoint.
 // Subscribes to localBus task:* events + 30s heartbeat full-push.
 // CPO Q6c + CTO §7.2 S7 §3.3.
 
@@ -31,7 +31,7 @@ export class TaskMirrorPusher {
     // ① 订阅 localBus
     localBus.on('event', this.onLocalBusEvent);
 
-    // ② 启动 30s 心跳（与 ConnectionManager 心跳错开 15s，避免同时压 TriMC）
+    // ② 启动 30s 心跳（与 ConnectionManager 心跳错开 15s，避免同时压 TriMMC）
     this.mirrorInterval = setInterval(() => {
       this.heartbeatPush().catch(() => {});
     }, 30_000);
@@ -65,7 +65,7 @@ export class TaskMirrorPusher {
   }
 
   /**
-   * HTTP POST to TriMC /internal/v1/tasks/mirror
+   * HTTP POST to TriMMC /internal/v1/tasks/mirror
    */
   private async push(tasks: MirrorTaskSnapshot[]): Promise<void> {
     const body = JSON.stringify({ nodeId: this.nodeId, tasks });
@@ -79,7 +79,7 @@ export class TaskMirrorPusher {
 
   /** 连接降级时调用：停止推送 */
   onDegraded(): void {
-    // 不主动 mark unknown — TriMC 端通过心跳超时自行判断
+    // 不主动 mark unknown — TriMMC 端通过心跳超时自行判断
     // 这样避免 degraded→connected 反复横跳导致状态抖动
   }
 
@@ -104,7 +104,7 @@ export class TaskMirrorPusher {
 // ── HTTP helpers ──
 
 /**
- * POST mirror payload to TriMC.
+ * POST mirror payload to TriMMC.
  * Fire-and-forget with 5s timeout — mirror 失败不影响本地功能。
  */
 function postMirror(

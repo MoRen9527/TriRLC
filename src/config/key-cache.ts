@@ -1,4 +1,4 @@
-// ── TriLC Key Cache ──
+// ── TriRLC Key Cache ──
 // Fetches provider keys from TriModel configuration-plane API,
 // persists them to disk (S3: 600 permissions in Phase 1; S2: AES-256-GCM in Phase 2),
 // and refreshes every 15 minutes with stagger to avoid thundering herd.
@@ -189,7 +189,7 @@ let _onKeyCacheUpdated: KeyCacheUpdatedCallback | null = null;
 
 /**
  * Register a callback to be invoked when the key cache is refreshed.
- * Used by TriLC consumer layer to re-initialize ModelClient with fresh keys.
+ * Used by TriRLC consumer layer to re-initialize ModelClient with fresh keys.
  */
 export function onKeyCacheUpdated(callback: KeyCacheUpdatedCallback): void {
   _onKeyCacheUpdated = callback;

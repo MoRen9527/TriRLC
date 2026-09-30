@@ -1,5 +1,5 @@
-// ── TriLC Watchdog ──
-// Independent watchdog process that monitors the TriLC daemon child process.
+// ── TriRLC Watchdog ──
+// Independent watchdog process that monitors the TriRLC daemon child process.
 // On crash: exponential backoff restart (1s→2s→4s→8s→16s→32s cap).
 // Rate limit: max 5 restarts per 10-minute sliding window.
 // On limit exceeded: stop, write error log, emit TUI notification file.
@@ -7,7 +7,7 @@
 // Usage:
 //   trilc watchdog [--port 8711] [--data-dir <path>]
 //
-// The watchdog spawns the main TriLC process as a child and monitors its
+// The watchdog spawns the main TriRLC process as a child and monitors its
 // lifecycle. It is designed to be used as a standalone supervisory process,
 // separate from the OS-level daemon registration (schtasks/launchd/systemd).
 

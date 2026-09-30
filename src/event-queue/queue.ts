@@ -1,6 +1,6 @@
-// ── TriLC Event Queue ──
-// Offline event queue manager. Enqueues local agent events when TriMC is unreachable,
-// replays them to TriMC upon reconnection. CTO-008-M §3.2.
+// ── TriRLC Event Queue ──
+// Offline event queue manager. Enqueues local agent events when TriMMC is unreachable,
+// replays them to TriMMC upon reconnection. CTO-008-M §3.2.
 
 import { createEventStore } from './store.js';
 import type { QueuedEvent, ReplayRequest, ReplayResponse } from './types.js';

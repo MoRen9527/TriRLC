@@ -1,6 +1,6 @@
 // ── MCP Configuration Loader (P6) ──
 // Reads MCP server definitions from .claude/mcp.json (CC-compatible format)
-// and project-local .trilc/mcp.json (TriLC-specific).
+// and project-local .trilc/mcp.json (TriRLC-specific).
 //
 // CC format (.claude/mcp.json):
 // {
@@ -76,7 +76,7 @@ export function loadMCPServerConfigs(cwd?: string): MCPServerConfig[] {
   const projectPath = cwd ? join(cwd, '.claude', 'mcp.json') : null;
   const projectConfig = projectPath ? parseConfigFile(projectPath) : null;
 
-  // 3. TriLC-specific: {cwd}/.trilc/mcp.json (highest priority)
+  // 3. TriRLC-specific: {cwd}/.trilc/mcp.json (highest priority)
   const trilcPath = cwd ? join(cwd, '.trilc', 'mcp.json') : null;
   const trilcConfig = trilcPath ? parseConfigFile(trilcPath) : null;
 
@@ -131,7 +131,7 @@ function writeRawConfigFile(filepath: string, config: McpConfigFile): void {
 
 /**
  * Add or update an MCP server config.
- * Writes to .trilc/mcp.json (TriLC-specific, highest priority) by default,
+ * Writes to .trilc/mcp.json (TriRLC-specific, highest priority) by default,
  * or .claude/mcp.json project-local when `project` is true.
  */
 export function addMCPServerConfig(

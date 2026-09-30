@@ -173,7 +173,7 @@ describe('FR-1 task_plan progress anchor injection', () => {
   it('injects the checklist before feeding round-2 context, exactly once', async () => {
     const plan = {
       items: [
-        { id: '1', description: 'audit TriMC cron module', status: 'done' },
+        { id: '1', description: 'audit TriMMC cron module', status: 'done' },
         { id: '2', description: 'write audit report', status: 'pending' },
       ],
       currentFocus: '2',
@@ -191,7 +191,7 @@ describe('FR-1 task_plan progress anchor injection', () => {
     assert.strictEqual(invocations.length, 3);
 
     // Invocation 2 must already see the anchor (injected at boundary 1→2).
-    const anchorNeedle = '[SYSTEM: Task progress — completed: #1 audit TriMC cron module';
+    const anchorNeedle = '[SYSTEM: Task progress — completed: #1 audit TriMMC cron module';
     assert.strictEqual(countIn(userTexts(invocations[1].messages), anchorNeedle), 1, 'anchor present in round 2');
     // currentFocus renders as the "in progress" item; nothing remains pending.
     assert.ok(userTexts(invocations[1].messages).some((t) => t.includes('in progress: #2 write audit report')));

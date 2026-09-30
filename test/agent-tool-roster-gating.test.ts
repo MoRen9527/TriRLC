@@ -128,7 +128,7 @@ describe('FADE-005 agent-tool /agents 响应解析（parseAgentsResponse）', ()
     assert.equal(list[0].id, 'ceo-chief-of-staff');
   });
 
-  it('TriMC 兼容形状（带 ok 字段）→ 同样解析', () => {
+  it('TriMMC 兼容形状（带 ok 字段）→ 同样解析', () => {
     const list = parseAgentsResponse({
       ok: true,
       agents: [{ agentId: 'ceo', name: 'CEO' }],

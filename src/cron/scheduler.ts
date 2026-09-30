@@ -1,4 +1,4 @@
-// ── TriLC Cron Scheduler ──
+// ── TriRLC Cron Scheduler ──
 // Cron expression + interval parsing via croner.
 // Wraps the croner library to provide nextRunMs / pattern introspection.
 //

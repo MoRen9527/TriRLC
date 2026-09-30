@@ -1,11 +1,11 @@
-// ── TriLC Key Encryptor (S2): AES-256-GCM + PBKDF2 machine fingerprint ──
+// ── TriRLC Key Encryptor (S2): AES-256-GCM + PBKDF2 machine fingerprint ──
 //
 // Phase 2 S2 security level:
 //   - Key encryption using AES-256-GCM with random IV
 //   - Key derivation via PBKDF2-HMAC-SHA256 from machine fingerprint
 //   - Even if keys.json is copied to another machine, it cannot be decrypted
 //
-// This is a TriLC-local copy of TriModel/src/security/key-encryptor.ts
+// This is a TriRLC-local copy of TriModel/src/security/key-encryptor.ts
 // to avoid cross-repository dependency at runtime.
 
 import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync } from 'node:crypto';

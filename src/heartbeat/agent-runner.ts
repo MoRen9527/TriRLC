@@ -1,4 +1,4 @@
-// ── TriLC Agent Runner ──
+// ── TriRLC Agent Runner ──
 // Default heartbeat agent execution: runOnce → agentLoop → persistence.
 // MVP: single model, tier 'subagent' (heartbeat-equivalent), session-store persistence.
 //

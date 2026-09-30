@@ -1,4 +1,4 @@
-# TriLC TUI MVP 验证测试报告
+# TriRLC TUI MVP 验证测试报告
 
 - **任务编号**: trilc-tui-impl-3
 - **测试工程师**: 小柯
@@ -195,8 +195,8 @@ TUI 模块可成功导入，核心运行时依赖就绪。7 项阻塞性缺陷�
 
 ## 使用依据
 
-- `TriLC/src/tui/tech-design.md` — CTO 技术设计
-- `TriLC/package.json` — 依赖声明
-- `TriLC/tsconfig.json` — 编译配置
+- `TriRLC/src/tui/tech-design.md` — CTO 技术设计
+- `TriRLC/package.json` — 依赖声明
+- `TriRLC/tsconfig.json` — 编译配置
 - `vendor/claude-code-tui/ink/` — 吸收基线
 - `src/tui/ink/`, `src/tui/components/`, `src/tui/hooks/`, `src/tui/utils/` — 实现代码

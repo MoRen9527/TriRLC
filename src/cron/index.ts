@@ -1,4 +1,4 @@
-// ── TriLC Cron Barrel ──
+// ── TriRLC Cron Barrel ──
 // Re-exports cron-related modules for consumers.
 
 export { createSessionReaper } from "./session-reaper.js";

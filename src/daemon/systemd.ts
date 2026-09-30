@@ -13,8 +13,8 @@ import path from "node:path";
 import os from "node:os";
 import { TRILC_SYSTEMD_UNIT } from "./constants.js";
 import type {
-  TriLCDaemonService,
-  TriLCDaemonServiceConfig,
+  TriRLCDaemonService,
+  TriRLCDaemonServiceConfig,
   DaemonServiceState,
   DaemonServiceStartResult,
 } from "./service.js";
@@ -33,7 +33,7 @@ function resolveUnitPath(): string {
 
 // ── Unit file generation ──
 
-function buildUnitFile(config: TriLCDaemonServiceConfig): string {
+function buildUnitFile(config: TriRLCDaemonServiceConfig): string {
   const execStart = [config.nodeBin, config.entryScript, ...config.programArgs]
     .map((a) => (/\s/.test(a) ? `"${a}"` : a))
     .join(" ");
@@ -100,7 +100,7 @@ async function isUnitFilePresent(): Promise<boolean> {
 
 // ── Service Operations ──
 
-async function stageService(config: TriLCDaemonServiceConfig): Promise<string> {
+async function stageService(config: TriRLCDaemonServiceConfig): Promise<string> {
   const unitDir = resolveUnitDir();
   await fs.mkdir(unitDir, { recursive: true });
 
@@ -111,7 +111,7 @@ async function stageService(config: TriLCDaemonServiceConfig): Promise<string> {
   return unitPath;
 }
 
-async function installService(config: TriLCDaemonServiceConfig): Promise<void> {
+async function installService(config: TriRLCDaemonServiceConfig): Promise<void> {
   await stageService(config);
 
   // Reload daemon to pick up the new unit file
@@ -138,7 +138,7 @@ async function installService(config: TriLCDaemonServiceConfig): Promise<void> {
   console.log(`${LOG_PREFIX} installed systemd service: ${TRILC_SYSTEMD_UNIT}`);
 }
 
-async function uninstallService(_config: TriLCDaemonServiceConfig): Promise<void> {
+async function uninstallService(_config: TriRLCDaemonServiceConfig): Promise<void> {
   const unitExists = await isUnitFilePresent();
 
   if (unitExists) {
@@ -157,7 +157,7 @@ async function uninstallService(_config: TriLCDaemonServiceConfig): Promise<void
   console.log(`${LOG_PREFIX} uninstalled systemd service: ${TRILC_SYSTEMD_UNIT}`);
 }
 
-async function stopService(_config: TriLCDaemonServiceConfig): Promise<void> {
+async function stopService(_config: TriRLCDaemonServiceConfig): Promise<void> {
   const stopRes = await execSystemctl(["stop", TRILC_SYSTEMD_UNIT]);
   if (stopRes.code !== 0) {
     const detail = (stopRes.stderr || stopRes.stdout).toLowerCase();
@@ -169,7 +169,7 @@ async function stopService(_config: TriLCDaemonServiceConfig): Promise<void> {
   console.log(`${LOG_PREFIX} stopped systemd service: ${TRILC_SYSTEMD_UNIT}`);
 }
 
-async function restartService(config: TriLCDaemonServiceConfig): Promise<DaemonServiceStartResult> {
+async function restartService(config: TriRLCDaemonServiceConfig): Promise<DaemonServiceStartResult> {
   const unitExists = await isUnitFilePresent();
   if (!unitExists) {
     const state = await readServiceState(config);
@@ -187,7 +187,7 @@ async function restartService(config: TriLCDaemonServiceConfig): Promise<DaemonS
   return { outcome: "started", state };
 }
 
-async function readServiceState(config: TriLCDaemonServiceConfig): Promise<DaemonServiceState> {
+async function readServiceState(config: TriRLCDaemonServiceConfig): Promise<DaemonServiceState> {
   const unitExists = await isUnitFilePresent();
 
   // Query ActiveState and MainPID in one call
@@ -255,7 +255,7 @@ async function readServiceState(config: TriLCDaemonServiceConfig): Promise<Daemo
   };
 }
 
-async function isServiceLoaded(_config: TriLCDaemonServiceConfig): Promise<boolean> {
+async function isServiceLoaded(_config: TriRLCDaemonServiceConfig): Promise<boolean> {
   const res = await execSystemctl(["is-enabled", TRILC_SYSTEMD_UNIT]);
   // is-enabled returns 0 for enabled, non-zero otherwise
   // Also accept "static" output (linked but not explicitly enabled)
@@ -265,7 +265,7 @@ async function isServiceLoaded(_config: TriLCDaemonServiceConfig): Promise<boole
 
 // ── Factory ──
 
-export function createSystemdService(): TriLCDaemonService {
+export function createSystemdService(): TriRLCDaemonService {
   return {
     stage: stageService,
     install: installService,

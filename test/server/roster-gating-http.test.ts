@@ -9,12 +9,12 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createTriLCApp } from '../../src/server/app.js';
+import { createTriRLCApp } from '../../src/server/app.js';
 
 const SAVED_ENV: Record<string, string | undefined> = {};
 
 let tmpDataDir: string;
-let app: ReturnType<typeof createTriLCApp>;
+let app: ReturnType<typeof createTriRLCApp>;
 let appPort: number;
 
 before(async () => {
@@ -57,7 +57,7 @@ before(async () => {
 
   // p0fix3：内部门 fail-closed——app.start() 前注入测试 token，请求统一带头。
   process.env.TRILC_INTERNAL_TOKEN = 'roster-gating-test-token';
-  app = createTriLCApp(env);
+  app = createTriRLCApp(env);
   await app.start();
   appPort = env.port;
   if (!appPort) throw new Error('app did not bind a port');

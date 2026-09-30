@@ -1,5 +1,5 @@
-// ── TriLC Sync Retry Logic ──
-// Job: Exponential backoff retry for fetch requests to TriMC.
+// ── TriRLC Sync Retry Logic ──
+// Job: Exponential backoff retry for fetch requests to TriMMC.
 //
 // Retry judgment rules (9 error classifications):
 //   - Network error (fetch throws)               → retry
@@ -53,7 +53,7 @@ export function isTimeoutError(err: unknown): boolean {
  * 退避序列：backoffs[0], backoffs[1], ... — 共 backoffs.length + 1 次 HTTP 调用。
  * 默认退避：[1000, 2000, 4000] → 共 4 次尝试，总耗时 ≤ 7s + 超时×4。
  *
- * @param url   TriMC 端点 URL
+ * @param url   TriMMC 端点 URL
  * @param body  同步 payload
  * @param config  重试配置（退避序列 + 超时）
  * @returns 最后一次响应 + retried 标记

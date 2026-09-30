@@ -9,4 +9,4 @@ role: CEOChiefOfStaff
 
 - 岗位标准定义（真源）：TriCompany/source-agents/ceo-chief-of-staff/（合同五件套：soul / agent-body / agent-frontmatter / memory / colleagues / social）
 - 本文件由 TriCade 初始化装配端点生成（POST /internal/v1/init/assemble），承载工作区员工索引与名字绑定；岗位职责修订走源侧合同。
-- 运行时身份注入由 TriLC contract-resolver 按 agent_id=ceo-chief-of-staff 执行；岗位是标准资产，名字是用户资产（CEO 开张时指定）。
+- 运行时身份注入由 TriRLC contract-resolver 按 agent_id=ceo-chief-of-staff 执行；岗位是标准资产，名字是用户资产（CEO 开张时指定）。

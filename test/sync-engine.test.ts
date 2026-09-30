@@ -1,11 +1,11 @@
-// ── TriLC Sync Engine Tests ──
+// ── TriRLC Sync Engine Tests ──
 // 17 test cases per CTO sync-engine-design.md §7.
 // Runner: node --import tsx --test test/sync-engine.test.ts
 
 import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { syncSessionToTriMC, syncPendingSessions, buildSyncPayload } from '../src/sync/index.js';
+import { syncSessionToTriMMC, syncPendingSessions, buildSyncPayload } from '../src/sync/index.js';
 import type { SyncEngineDeps, SyncMessageInput } from '../src/sync/index.js';
 import type { SessionRecord, SyncStatus } from '../src/session-store/types.js';
 import type { SyncRequestPayload, SyncSuccessResponse, SyncConflictResponse } from '../src/sync/types.js';
@@ -165,7 +165,7 @@ describe('sync-engine', () => {
     };
 
     const deps = makeDeps(store);
-    const result = await syncSessionToTriMC('sess-t01', deps);
+    const result = await syncSessionToTriMMC('sess-t01', deps);
 
     assert.equal(result.ok, true);
     assert.equal(result.cloudSessionId, 'cloud-t01');
@@ -175,7 +175,7 @@ describe('sync-engine', () => {
   });
 
   // ═══ T02: 409 去重 ═══
-  it('T02: 409 dedup — TriMC returns 409 → synced with existingCloudSessionId', async () => {
+  it('T02: 409 dedup — TriMMC returns 409 → synced with existingCloudSessionId', async () => {
     const store = createMockStore({
       sessions: [{ id: 'sess-t02', syncStatus: 'pending' }],
       messages: { 'sess-t02': [makeMsg()] },
@@ -189,7 +189,7 @@ describe('sync-engine', () => {
     } satisfies SyncConflictResponse);
 
     const deps = makeDeps(store);
-    const result = await syncSessionToTriMC('sess-t02', deps);
+    const result = await syncSessionToTriMMC('sess-t02', deps);
 
     assert.equal(result.ok, true);
     assert.equal(result.cloudSessionId, 'cloud-existing-02');
@@ -221,7 +221,7 @@ describe('sync-engine', () => {
     };
 
     const deps = makeDeps(store);
-    const result = await syncSessionToTriMC('sess-t03', deps);
+    const result = await syncSessionToTriMMC('sess-t03', deps);
 
     assert.equal(result.ok, true);
     assert.equal(result.retried, true);
@@ -239,7 +239,7 @@ describe('sync-engine', () => {
     fetchHandler = async () => jsonRes(503, { ok: false, error: 'service_unavailable', message: 'Down' });
 
     const deps = makeDeps(store);
-    const result = await syncSessionToTriMC('sess-t04', deps);
+    const result = await syncSessionToTriMMC('sess-t04', deps);
 
     assert.equal(result.ok, false);
     assert.equal(result.retried, true);
@@ -254,7 +254,7 @@ describe('sync-engine', () => {
     });
 
     const deps = makeDeps(store);
-    const result = await syncSessionToTriMC('sess-t05', deps);
+    const result = await syncSessionToTriMMC('sess-t05', deps);
 
     assert.equal(result.ok, false);
     assert.equal(result.error, 'already_syncing');
@@ -268,7 +268,7 @@ describe('sync-engine', () => {
     });
 
     const deps = makeDeps(store);
-    const result = await syncSessionToTriMC('sess-t06', deps);
+    const result = await syncSessionToTriMMC('sess-t06', deps);
 
     assert.equal(result.ok, true);
     assert.equal(result.syncedMessageCount, 0);
@@ -282,7 +282,7 @@ describe('sync-engine', () => {
     });
 
     const deps = makeDeps(store);
-    const result = await syncSessionToTriMC('sess-t07', deps);
+    const result = await syncSessionToTriMMC('sess-t07', deps);
 
     assert.equal(result.ok, true);
     assert.equal(result.cloudSessionId, 'cloud-07');
@@ -332,7 +332,7 @@ describe('sync-engine', () => {
     };
 
     const deps = makeDeps(store);
-    const result = await syncSessionToTriMC('sess-t09', deps);
+    const result = await syncSessionToTriMMC('sess-t09', deps);
 
     assert.equal(result.ok, true);
     assert.equal(result.syncedMessageCount, 0);
@@ -344,7 +344,7 @@ describe('sync-engine', () => {
     const store = createMockStore();
 
     const deps = makeDeps(store);
-    const result = await syncSessionToTriMC('nonexistent', deps);
+    const result = await syncSessionToTriMMC('nonexistent', deps);
 
     assert.equal(result.ok, false);
     assert.equal(result.error, 'session_not_found');
@@ -374,7 +374,7 @@ describe('sync-engine', () => {
     };
 
     const deps = makeDeps(store);
-    const result = await syncSessionToTriMC('sess-t11', deps);
+    const result = await syncSessionToTriMMC('sess-t11', deps);
 
     assert.equal(result.ok, true);
     assert.equal(result.retried, true);
@@ -396,7 +396,7 @@ describe('sync-engine', () => {
     };
 
     const deps = makeDeps(store);
-    const result = await syncSessionToTriMC('sess-t12', deps);
+    const result = await syncSessionToTriMMC('sess-t12', deps);
 
     assert.equal(result.ok, false);
     assert.equal(callCount, 1); // no retry — 400 is non-retryable
@@ -497,7 +497,7 @@ describe('sync-engine', () => {
     };
 
     const deps = makeDeps(store);
-    const result = await syncSessionToTriMC('sess-t15', deps);
+    const result = await syncSessionToTriMMC('sess-t15', deps);
 
     assert.equal(result.ok, true);
     assert.equal(result.cloudSessionId, 'cloud-t15');

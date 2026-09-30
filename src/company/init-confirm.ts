@@ -3,7 +3,7 @@
 //
 //   GET /internal/v1/init/confirm/check（按需计算，无后台常驻轮询）：
 //   - L1 注册同一性：project-registry activeProjectKey/repoUrl/worktrees[] ↔
-//     bundle.project ↔ TriMC status.project 三面比对；路径用短指纹呈现
+//     bundle.project ↔ TriMMC status.project 三面比对；路径用短指纹呈现
 //     （SHA-256(worktreePath).slice(0,8)，§7.2 防截断）；不匹配 = ERROR
 //     （错误仓/错误分支）。
 //   - L2 版本一致：本地 dev HEAD == bundle.project.devHead ==
@@ -13,7 +13,7 @@
 //     （sync commit 即探针）；未 applied = 「未就绪」+ 重试提示。
 //   - L4 反向闭环：由首个协同工作承载（周平面平移，I5 树）——
 //     { status: 'pending', note: '由首个协同工作承载' }。
-//   - 降级口径（§7.2.3）：TriMC HTTP 不可达 → L2 服务器侧事实退化（本地
+//   - 降级口径（§7.2.3）：TriMMC HTTP 不可达 → L2 服务器侧事实退化（本地
 //     push 成功 + 裸仓 reflog 人工口径），MVP 接受——remote: null +
 //     degraded: true；L2 双值比较（本地 == bundle）。
 //

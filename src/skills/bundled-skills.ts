@@ -4,7 +4,7 @@
 //
 // P3: Populated with high-value skills absorbed from Claude Code's
 // src/skills/bundled/ (simplify, debug, remember). Prompts adapted to
-// TriLC's BundledSkillDefinition (getPromptForCommand returns a string)
+// TriRLC's BundledSkillDefinition (getPromptForCommand returns a string)
 // and stripped of CC-internal dependencies (settings paths, debug-log
 // plumbing, auto-memory feature flags).
 
@@ -59,7 +59,7 @@ export function clearBundledSkills(): void {
 
 // ── simplify (CC src/skills/bundled/simplify.ts) ──
 // Review changed code for reuse/quality/efficiency, then fix.
-// AGENT_TOOL_NAME placeholder resolved to TriLC's AgentTool name ("Agent").
+// AGENT_TOOL_NAME placeholder resolved to TriRLC's AgentTool name ("Agent").
 const SIMPLIFY_PROMPT = `# Simplify: Code Review and Cleanup
 
 Review all changed files for reuse, quality, and efficiency. Fix any issues found.
@@ -113,7 +113,7 @@ When done, briefly summarize what was fixed (or confirm the code was already cle
 
 // ── debug (CC src/skills/bundled/debug.ts, adapted) ──
 // CC's version tails its own session debug log and references CC settings
-// paths; both are CC-runtime-specific. TriLC adaptation keeps the diagnostic
+// paths; both are CC-runtime-specific. TriRLC adaptation keeps the diagnostic
 // workflow but targets the project's own logs and error output.
 const DEBUG_PROMPT = `# Debug Skill
 
@@ -138,7 +138,7 @@ Help the user debug the issue they're encountering.
 `;
 
 // ── remember (CC src/skills/bundled/remember.ts, adapted) ──
-// CC's version reviews auto-memory layers (ant-only feature). TriLC has no
+// CC's version reviews auto-memory layers (ant-only feature). TriRLC has no
 // auto-memory; adaptation reviews CLAUDE.md / CLAUDE.local.md hygiene.
 const REMEMBER_PROMPT = `# Memory Review
 
@@ -192,7 +192,7 @@ Output a structured report grouped by action type:
 `;
 
 // ── P6: claude-api (prompt-only, CC equivalent) ──
-// CC bundles 247KB embedded docs; TriLC condenses to a focused prompt that
+// CC bundles 247KB embedded docs; TriRLC condenses to a focused prompt that
 // guides the model to use WebFetch for the latest Anthropic API docs.
 const CLAUDE_API_PROMPT = `# Claude API & Agent SDK Skill
 
@@ -258,7 +258,7 @@ For any of the following, use WebFetch to get the latest docs:
 - New features not yet in these skill docs
 - Framework-specific integration guides`;
 
-// ── P6: keybindings (adapted for TriLC, CC equivalent) ──
+// ── P6: keybindings (adapted for TriRLC, CC equivalent) ──
 const KEYBINDINGS_PROMPT = `# TriCade Keybindings Reference
 
 ## Cursor Movement (in Input Box)
@@ -454,7 +454,7 @@ export function initBundledSkills(): void {
   });
 
   // ── P6: claude-api (prompt-only adaptation, CC equivalent) ──
-  // CC bundles 247KB of embedded docs via Bun text loader; TriLC uses a
+  // CC bundles 247KB of embedded docs via Bun text loader; TriRLC uses a
   // condensed prompt that guides the model to use WebFetch for latest docs.
   registerBundledSkill({
     name: 'claude-api',
@@ -473,7 +473,7 @@ export function initBundledSkills(): void {
     },
   });
 
-  // ── P6: keybindings (adapted for TriLC, CC equivalent) ──
+  // ── P6: keybindings (adapted for TriRLC, CC equivalent) ──
   registerBundledSkill({
     name: 'keybindings',
     description:

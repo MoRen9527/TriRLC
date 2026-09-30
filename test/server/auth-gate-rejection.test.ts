@@ -3,7 +3,7 @@
 //
 // 审计真源：docs/workflow/operating-records/2026-W35/trees/rmc-audit-cmp-001/reports/
 // rmc-TriLC.md P0-1（发现 8）——「全 HTTP 面零认证 + 无 Host 校验可被 DNS rebinding
-// 远程触达」。修复语义（src/server/app.ts，行号为 TriLC HEAD=26720dd 工作树 Read 实证）：
+// 远程触达」。修复语义（src/server/app.ts，行号为 TriRLC HEAD=26720dd 工作树 Read 实证）：
 //
 //   门序契约：/healthz 精确豁免(:1548) → Host 门(:1593-1599) → Origin 门(:1600-1607)
 //             → X-Internal-Token 门(:1609-1624) → 其余业务路由。
@@ -14,10 +14,10 @@
 //       （完全无 Host 的裸请求由 llhttp 解析器层先回 400 不到达本门——pdT-round1 实测，见 e8 双层口径）
 //     Origin 存在且非 'null' 且不命中          → 403 {"error":"forbidden_origin"}    :1600-1607
 //   token 于请求期读 env 不缓存启动快照(:1612)，支持运行中注入测试；
-//   允许集每判定重建(:164-180)；与 TriMC 参照实现的差异 = 参照为 fail-open 变体，
+//   允许集每判定重建(:164-180)；与 TriMMC 参照实现的差异 = 参照为 fail-open 变体，
 //   本面反转 fail-closed（故意语义变化，漏配即全拒）。
 //
-// 分层：六导出纯函数单元直测(:110-214) + createTriLCApp 真起服端到端。端到端起服配方
+// 分层：六导出纯函数单元直测(:110-214) + createTriRLCApp 真起服端到端。端到端起服配方
 // 对齐 test/server/tasks-submit-weekly-hint.test.ts 既有先例（临时数据目录 + port 0 +
 // trimodelApiUrl 指向死端口快速降级）；HTTP 全部走 node:http 裸请求而非 fetch——
 // fetch 规范禁止覆写/省略 Host 头，裸客户端才能伪造与省略。
@@ -36,7 +36,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  createTriLCApp,
+  createTriRLCApp,
   extractInternalToken,
   timingSafeStringEquals,
   collectHostAllowEntries,
@@ -250,13 +250,13 @@ describe('P0 通道二单元层：originHeaderAllowed（app.ts:201-214）', () =
   });
 });
 
-// ══════════════════════ 端到端层：createTriLCApp 真起服过全局门 ══════════════════════
+// ══════════════════════ 端到端层：createTriRLCApp 真起服过全局门 ══════════════════════
 
 const TEST_INTERNAL_TOKEN = 'pd-t-auth-gate-fixed-token';
 // 业务可达锚路由：GET /internal/v1/cron/jobs（:3591-3602），最小副作用、稳定 JSON 形状。
 
-describe('P0 通道一/二端到端：createTriLCApp 真实 HTTP 全局门（rmc-TriLC.md P0-1 向量复现）', () => {
-  let app: ReturnType<typeof createTriLCApp>;
+describe('P0 通道一/二端到端：createTriRLCApp 真实 HTTP 全局门（rmc-TriLC.md P0-1 向量复现）', () => {
+  let app: ReturnType<typeof createTriRLCApp>;
   let appPort: number;
   let tmpDataDir: string;
 
@@ -314,7 +314,7 @@ describe('P0 通道一/二端到端：createTriLCApp 真实 HTTP 全局门（rmc
     env.port = 0;
     env.trimodelApiUrl = 'http://127.0.0.1:1'; // 死端口，密钥初始化快速降级、零外呼
 
-    app = createTriLCApp(env);
+    app = createTriRLCApp(env);
     await app.start();
     appPort = env.port;
     if (!appPort) throw new Error('app did not bind a port');

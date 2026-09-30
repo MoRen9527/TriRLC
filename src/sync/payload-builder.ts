@@ -1,4 +1,4 @@
-// ── TriLC Sync Payload Builder ──
+// ── TriRLC Sync Payload Builder ──
 // Job: Assemble SessionRecord + SessionMessageRecord[] into SyncRequestPayload.
 //
 // Rules:
@@ -19,7 +19,7 @@ export interface SyncMessageInput {
 }
 
 /**
- * 构建发送给 TriMC 的同步 payload。
+ * 构建发送给 TriMMC 的同步 payload。
  *
  * @param session    会话记录
  * @param messages   消息列表

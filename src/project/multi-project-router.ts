@@ -12,7 +12,7 @@
 //                 operating-records) — READ-ONLY shared view. Set only when
 //                 TRILC_WEEKLY_PLANE_ROOT is configured or workspace sibling
 //                 discovery succeeds; never auto-created, never written by
-//                 TriLC (write ownership stays with the orchestration layer).
+//                 TriRLC (write ownership stays with the orchestration layer).
 // Isolation note: pipe3-1's prohibition surface is cross-project access to
 //                 the `.tricompany-cognition/` memory stores. The weekly plane
 //                 is NOT a memory store — it is a user-configured read-only

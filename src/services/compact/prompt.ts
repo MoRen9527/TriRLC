@@ -1,4 +1,4 @@
-// ── Compact Prompt (CC prompt.ts adapted for TriLC) ──
+// ── Compact Prompt (CC prompt.ts adapted for TriRLC) ──
 // Core compact prompt template from CC: analysis + summary structure.
 
 const NO_TOOLS_PREAMBLE = `CRITICAL: Respond with TEXT ONLY. Do NOT call any tools.

@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createTriLCApp } from '../../src/server/app.js';
+import { createTriRLCApp } from '../../src/server/app.js';
 
 const SAVED_ENV = {
   TRILC_DATA_DIR: process.env.TRILC_DATA_DIR,
@@ -25,7 +25,7 @@ const SAVED_ENV = {
 const TEST_INTERNAL_TOKEN = 'letters-e2e-internal-token';
 
 let tmpDataDir: string;
-let app: ReturnType<typeof createTriLCApp>;
+let app: ReturnType<typeof createTriRLCApp>;
 let appPort: number;
 
 async function req(
@@ -105,7 +105,7 @@ before(async () => {
   env.port = 0;
   env.trimodelApiUrl = 'http://127.0.0.1:1';
 
-  app = createTriLCApp(env);
+  app = createTriRLCApp(env);
   await app.start();
   appPort = env.port;
   if (!appPort) throw new Error('app did not bind a port');

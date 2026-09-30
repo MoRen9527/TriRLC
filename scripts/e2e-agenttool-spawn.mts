@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
-import { createTriLCApp } from '../src/server/app.js';
+import { createTriRLCApp } from '../src/server/app.js';
 import { readEnv } from '../src/config/env.js';
 import { defaultChainFile } from '../src/company/init-chain.js';
 import { registerAgentTool } from '../src/tools/agent-tool.js';
@@ -45,12 +45,12 @@ process.env.TRILC_TRIMODEL_API_URL = 'http://127.0.0.1:1';
 delete process.env.TRILC_WEEKLY_PLANE_ROOT;
 console.log(`[probe] 8711 ${portFree ? '空闲 → 隔离 daemon 直绑 8711（自闭环）' : '被占用 → fetch 现役 /agents（只读）'}`);
 
-let app: ReturnType<typeof createTriLCApp>;
+let app: ReturnType<typeof createTriRLCApp>;
 try {
   const env = readEnv();
   env.port = portFree ? 8711 : 0;
   env.trimodelApiUrl = 'http://127.0.0.1:1';
-  app = createTriLCApp(env);
+  app = createTriRLCApp(env);
   await app.start();
   const port = env.port;
   if (!port) throw new Error('app did not bind a port');

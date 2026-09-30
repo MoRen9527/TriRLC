@@ -1,4 +1,4 @@
-// ── TriLC Session Store (SQLite) ──
+// ── TriRLC Session Store (SQLite) ──
 // Persists agent conversation sessions for recovery after abnormal interruption.
 // Uses Node 22 built-in node:sqlite (same pattern as event-queue store).
 //
@@ -57,7 +57,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at);
 CREATE INDEX IF NOT EXISTS idx_msgs_session ON session_messages(session_id, seq);
 `;
 
-// CTO-009-4: cloud sync schema migration — Phase 1 TriLC→TriMC single-direction push.
+// CTO-009-4: cloud sync schema migration — Phase 1 TriRLC→TriMMC single-direction push.
 // Uses ALTER TABLE ADD COLUMN (no table rebuild) — safe on existing data.
 const MIGRATIONS: Record<number, string> = {
   2: `

@@ -1,9 +1,9 @@
-// ── TriLC Connection Manager Tests ──
+// ── TriRLC Connection Manager Tests ──
 // Covers: degraded/connected state machine transitions, replay trigger,
 // heartbeat wake delegation, enable/disable toggle.
 //
 // ConnectionManager is an internal class in src/server/app.ts.
-// We test it by importing createTriLCApp and exercising the connection
+// We test it by importing createTriRLCApp and exercising the connection
 // state through the ConnectionManager's public interface.
 
 import assert from "node:assert/strict";
@@ -15,12 +15,12 @@ import { afterEach, beforeEach, describe, it, mock } from "node:test";
 
 import {
   createHeartbeatWake,
-  type TriLCHeartbeatWake,
+  type TriRLCHeartbeatWake,
   type HeartbeatRunResult,
 } from "../src/heartbeat/heartbeat-wake.js";
 
 describe("ConnectionManager — Heartbeat Wake Integration", () => {
-  let wake: TriLCHeartbeatWake;
+  let wake: TriRLCHeartbeatWake;
 
   beforeEach(() => {
     wake = createHeartbeatWake();

@@ -1,4 +1,4 @@
-// Anthropic SSE client for TriLC daemon /v1/messages
+// Anthropic SSE client for TriRLC daemon /v1/messages
 // REGR-005: added onContentBlockStart / onContentBlockDelta for tool-call streaming.
 export interface AnthropicSSECallbacks {
   onContentDelta: (text: string) => void;

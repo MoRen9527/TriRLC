@@ -1,4 +1,4 @@
-// ── Tools ctx.cwd resolution tests (r4-1 A-TriLC) ──
+// ── Tools ctx.cwd resolution tests (r4-1 A-TriRLC) ──
 // REQ-014b gate assertions, two shapes:
 //   1. ctx.cwd present → relative paths resolve against the agent loop cwd,
 //      NOT the process launch dir.
@@ -51,7 +51,7 @@ after(() => {
 
 const ctxA: ToolContext = { cwd: dirA };
 
-describe('ctx.cwd propagation — five read tools (A-TriLC)', () => {
+describe('ctx.cwd propagation — five read tools (A-TriRLC)', () => {
   it('LS: relative path resolves against ctx.cwd, not process.cwd()', async () => {
     const result = JSON.parse(await executeTool('LS', { path: '.' }, ctxA));
     assert.equal(result.path.toLowerCase(), dirA.toLowerCase());
@@ -95,7 +95,7 @@ describe('ctx.cwd propagation — five read tools (A-TriLC)', () => {
   });
 });
 
-describe('ctx absent — legacy fallback to process.cwd() (A-TriLC)', () => {
+describe('ctx absent — legacy fallback to process.cwd() (A-TriRLC)', () => {
   it('LS without ctx resolves against process.cwd()', async () => {
     const result = JSON.parse(await executeTool('LS', { path: '.' }));
     assert.equal(result.path.toLowerCase(), resolve(process.cwd(), '.').toLowerCase());
