@@ -56,6 +56,17 @@ describe('session-initializer', () => {
           '    - skip tests',
           'collaborators:',
           '  reports_to: ceo',
+          // v3 字段族现役形（LG-060 跟新；真源=source-agents v3）
+          'tools:',
+          '  - name: read',
+          '    scope: [docs/]',
+          '    risk_level: low',
+          '    requires_approval: false',
+          '    runtime_equivalent: trimc:read_file',
+          'runtime_baseline:',
+          '  host: copilot-host',
+          '  tri_mc_status: planned',
+          '  tri_mc_migration_ready: false',
           'io_contract:',
           '  inputs:',
           '    - type: msg',
@@ -120,6 +131,14 @@ describe('session-initializer', () => {
       forbidden: ['skip tests'],
     });
     assert.deepEqual(config.toolControl, { tools: ['read'] });
+    // v3 字段族断言（LG-060 跟新）：SessionConfig 携带 tools/runtime_equivalent + runtime_baseline
+    assert.equal(config.tools.length, 1);
+    assert.equal(config.tools[0]?.runtime_equivalent, 'trimc:read_file');
+    assert.deepEqual(config.runtime_baseline, {
+      host: 'copilot-host',
+      tri_mc_status: 'planned',
+      tri_mc_migration_ready: false,
+    });
     assert.equal(config.employeeInfo?.id, 'sample-agent');
     assert.match(config.readyAt, /^\d{4}-\d{2}-\d{2}T/);
 

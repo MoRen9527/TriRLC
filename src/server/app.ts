@@ -1737,7 +1737,7 @@ export function createTriLCApp(env: TriLCEnv) {
           res.writeHead(200, { 'content-type': 'application/json' });
           res.end(JSON.stringify({
             ok: true,
-            service: 'trirlc',
+            service: 'trilc',
             serverTime: new Date().toISOString(),
             // LG-033 mc_link/mc_peer 双字段（BOD 热重建批 2026-09-08）：自识别面
             // 归属无需问人；trimc 旧字段保留一版双写（消费方全迁移后下批退役）。
@@ -2900,7 +2900,7 @@ export function createTriLCApp(env: TriLCEnv) {
               id: m.id,
               object: 'model',
               created: Math.floor(new Date(m.createdAt).getTime() / 1000),
-              owned_by: 'trirlc',
+              owned_by: 'trilc',
             })),
           }));
           return;

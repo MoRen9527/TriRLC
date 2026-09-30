@@ -22,6 +22,9 @@ export interface SessionConfig {
   systemPrompt: string;
   decisionRights: AgentContract['decisionRights'];
   toolControl: Record<string, unknown>;
+  /** v3 字段族（LG-060 跟新）：工具面含 runtime_equivalent；运行时基线对象形透传。 */
+  tools: AgentContract['tools'];
+  runtime_baseline: AgentContract['runtime_baseline'];
   employeeInfo?: EmployeeRosterEntry;
   workspaceRoot: string;
   readyAt: string;
@@ -77,6 +80,8 @@ export async function initializeSession(
   });
 
   const toolControl = resolver.getToolControl(agentId) ?? {};
+  const tools = resolver.getTools(agentId) ?? [];
+  const runtimeBaseline = resolver.getRuntimeBaseline(agentId);
   const employeeInfo = resolver.getEmployeeInfo(agentId);
   const dir = await ensureWorkspaceDir(workspaceRoot);
 
@@ -85,6 +90,8 @@ export async function initializeSession(
     systemPrompt: injected.prompt,
     decisionRights,
     toolControl,
+    tools,
+    runtime_baseline: runtimeBaseline,
     employeeInfo,
     workspaceRoot: dir,
     readyAt: new Date().toISOString(),
