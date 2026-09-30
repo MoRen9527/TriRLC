@@ -5,7 +5,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
-import { render } from 'ink-testing-library';
+import { render } from './helpers/test-renderer.js';
 import Markdown from '../../src/tui/components/Markdown.js';
 import ToolCallLine from '../../src/tui/components/ToolCallLine.js';
 
@@ -115,33 +115,31 @@ describe('V-002 Markdown rendering', () => {
 // V-003: ToolCallLine three states + arg handling
 // ═══════════════════════════════════════════
 describe('V-003 ToolCallLine states', () => {
-  it('pending shows braille spinner frame character', () => {
+  it('pending shows status dot ● (V4 校准：npm-ink 时代 braille 期望→现役 ●+blink，头注 ToolCallLine.tsx:7-9)', () => {
     const { lastFrame } = render(
       React.createElement(ToolCallLine, { name: 'read_file', args: '{"path":"/tmp/test.txt"}', status: 'pending' })
     );
     const frame = lastFrame() ?? '';
-    // Should contain one of the braille spinner characters
-    const brailleFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-    const hasBraille = brailleFrames.some(f => frame.includes(f));
-    assert.ok(hasBraille, `Should contain braille spinner character, got: ${frame}`);
+    // 现役组件三态统一 ● 指示（blink 仅 TTY 色面，headless 帧不可断言）
+    assert.ok(frame.includes('●'), `Should contain status dot, got: ${frame}`);
     assert.ok(frame.includes('read_file'), 'Should contain tool name');
   });
 
-  it('done shows green checkmark', () => {
+  it('done shows status dot ● (V4 校准：✓ 期望→现役 ● solid，头注 ToolCallLine.tsx:8)', () => {
     const { lastFrame } = render(
       React.createElement(ToolCallLine, { name: 'read_file', args: '{"path":"/tmp/test.txt"}', status: 'done' })
     );
     const frame = lastFrame() ?? '';
-    assert.ok(frame.includes('✓'), `Should contain checkmark, got: ${frame}`);
+    assert.ok(frame.includes('●'), `Should contain status dot, got: ${frame}`);
     assert.ok(frame.includes('read_file'), 'Should contain tool name');
   });
 
-  it('error shows red cross mark', () => {
+  it('error shows failure marker 失败 (V4 校准：✗ 期望→现役 ●+失败 标，头注 ToolCallLine.tsx:9/:74)', () => {
     const { lastFrame } = render(
       React.createElement(ToolCallLine, { name: 'exec', args: '{"cmd":"rm -rf /"}', status: 'error' })
     );
     const frame = lastFrame() ?? '';
-    assert.ok(frame.includes('✗'), `Should contain cross mark, got: ${frame}`);
+    assert.ok(frame.includes('失败'), `Should contain failure marker, got: ${frame}`);
     assert.ok(frame.includes('exec'), 'Should contain tool name');
   });
 

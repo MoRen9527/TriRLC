@@ -1,7 +1,8 @@
-// ── Ink TUI bootstrap (npm ink rendering + CC input pipeline) ──
+// ── Ink TUI bootstrap (自研 fork 渲染 + CC input pipeline) ──
 // P10: CC terminal input layer replaces npm ink's stdin/useInput.
-// Rendering components (Box, Text, etc.) still use npm ink.
-// Stdin is managed by InputPipeline; npm ink receives a shim stdin.
+// Rendering components (Box, Text, render) 走 src/tui/fork.js barrel（自研
+// src/tui/ink/ 引擎；npm ink 依赖已撤，batch-03 件 2 V3 裁条）。
+// Stdin is managed by InputPipeline; the fork receives a shim stdin.
 import React from 'react';
 import { render } from './fork.js';
 import App from './app.js';
