@@ -8,7 +8,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { createTriRLCApp } from '../../src/server/app.js';
 
 const SAVED_ENV: Record<string, string | undefined> = {};
@@ -49,6 +49,13 @@ before(async () => {
     }),
     'utf-8',
   );
+
+  // WO-F fixture 自足化：candidate 判据依赖 resolver 单例 catalog（getRoleCatalog
+  // 无 roster 即 null→全 unknown）——显式挂真源+loadAll+roster（防跨文件单例泄漏偶通）。
+  const { getContractResolver } = await import('../../src/config/contract-resolver.js');
+  getContractResolver(resolve('..', 'TriCompany', 'source-agents'));
+  await getContractResolver().loadAll();
+  getContractResolver().loadEmployeeRoster();
 
   const { readEnv } = await import('../../src/config/env.js');
   const env = readEnv();
@@ -118,17 +125,20 @@ describe('FADE-ASSESS-005 派工门禁 (tasks/submit ownerRoleId)', () => {
     assert.ok(json.sessionId);
   });
 
-  it('ownerRoleId = 未上岗岗（candidate）→ 409 owner_not_active，不静默', async () => {
+  it('ownerRoleId = 未上岗岗（senior-test-engineer，candidate）→ 409 owner_not_active，不静默', async () => {
+    // WO-F fixture 校准（2026-10-01）：原用 test-engineer 系已改名离场席 id——
+    // roster 查无=gate.status 'unknown'（非 candidate）且构成 FADE-003 计数缺格。
+    // 对现役席 id 校准；409 门行为零变更。
     // candidate：真实未上岗岗 test-engineer（TriCompany 13 岗之一，本测试仅
     // full-stack-developer 在岗）。终审收口 ③：roleId 对齐真实值 + 断言收紧
     // 为严格 candidate（不再放宽 unknown）。
     const cand = await postJSON('/internal/v1/tasks/submit', {
       message: 'dispatch to not-onboarded role',
-      ownerRoleId: 'test-engineer',
+      ownerRoleId: 'senior-test-engineer',
     });
     assert.equal(cand.status, 409);
     assert.equal(cand.json.error, 'owner_not_active');
-    assert.equal(cand.json.roleId, 'test-engineer');
+    assert.equal(cand.json.roleId, 'senior-test-engineer');
     assert.equal(cand.json.rosterStatus, 'candidate');
 
     // unknown：目录外岗位同样拒绝
@@ -152,7 +162,7 @@ describe('FADE-ASSESS-005 派工门禁 (tasks/submit ownerRoleId)', () => {
         {
           requestId: 'staffing_test_pending',
           runId: 'run_test_pending',
-          roleId: 'test-engineer',
+          roleId: 'senior-test-engineer',
           displayName: '测试工程师',
           requester: 'ceo-panel',
           requestedAt: '2026-08-20T00:00:00.000Z',
@@ -164,7 +174,7 @@ describe('FADE-ASSESS-005 派工门禁 (tasks/submit ownerRoleId)', () => {
 
     const res = await postJSON('/internal/v1/tasks/submit', {
       message: 'dispatch to pending role',
-      ownerRoleId: 'test-engineer',
+      ownerRoleId: 'senior-test-engineer',
     });
     assert.equal(res.status, 409);
     assert.equal(res.json.error, 'owner_not_active');
