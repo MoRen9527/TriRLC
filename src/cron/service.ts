@@ -1,4 +1,4 @@
-// ── TriLC Cron Service ──
+// ── TriRLC Cron Service ──
 // Phase 2: basic cron job scheduling with croner + SQLite persistence.
 // Phase 3: full CronService with updateJob, runJob, execution logs, timer, and locked mutex.
 

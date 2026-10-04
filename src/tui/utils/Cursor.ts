@@ -386,7 +386,7 @@ export class Cursor {
     return this.left().modifyText(this);
   }
 
-  // ── Helper stubs for CC API compatibility (TriLC has no image refs) ──
+  // ── Helper stubs for CC API compatibility (TriRLC has no image refs) ──
   private imageRefStartingAt(_offset: number): { start: number; end: number } | null {
     return null;
   }

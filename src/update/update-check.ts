@@ -1,5 +1,5 @@
 // ── TriCade Auto-Update Check (Phase 3 pipe3-1) ──
-// Periodically checks GitHub Releases for a newer TriLC version.
+// Periodically checks GitHub Releases for a newer TriRLC version.
 // Compares local version.json vs the latest GitHub Release tag.
 // Exposes /internal/v1/update/check as an HTTP GET endpoint.
 // TriPilot can optionally consume this endpoint to show update notifications.
@@ -115,7 +115,7 @@ async function fetchLatestRelease(
   try {
     const headers: Record<string, string> = {
       'Accept': 'application/vnd.github+json',
-      'User-Agent': 'TriLC-Update-Check/1.0',
+      'User-Agent': 'TriRLC-Update-Check/1.0',
       'X-GitHub-Api-Version': '2022-11-28',
     };
     if (githubToken) {

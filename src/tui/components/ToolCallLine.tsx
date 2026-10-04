@@ -1,7 +1,7 @@
 // ── ToolCall line component (CC-aligned, ● + useBlink + human-readable descriptions) ──
 // Displays what the tool is DOING, not just raw name+args.
 // CC behavior: tool_use renders with tool description from definition.
-// TriLC: hardcodes descriptions for 5 CC tools + generic fallback.
+// TriRLC: hardcodes descriptions for 5 CC tools + generic fallback.
 //
 // Status rendering:
 //   pending: ● blinking (dim) — "正在读取文件…"

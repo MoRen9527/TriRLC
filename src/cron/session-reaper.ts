@@ -1,4 +1,4 @@
-// ── TriLC Session Reaper ──
+// ── TriRLC Session Reaper ──
 // Periodically sweeps expired / stale sessions from the SQLite session store.
 // Cleanup strategy:
 //   completed   → 30d after last update

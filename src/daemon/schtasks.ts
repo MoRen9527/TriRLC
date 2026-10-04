@@ -9,23 +9,23 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { TRILC_TASK_NAME } from "./constants.js";
 import type {
-  TriLCDaemonService,
-  TriLCDaemonServiceConfig,
+  TriRLCDaemonService,
+  TriRLCDaemonServiceConfig,
   DaemonServiceState,
   DaemonServiceStartResult,
 } from "./service.js";
 
 const LOG_PREFIX = "[trilc:daemon]";
 
-function resolveStateDir(config: TriLCDaemonServiceConfig): string {
+function resolveStateDir(config: TriRLCDaemonServiceConfig): string {
   return path.join(config.dataDir, "daemon");
 }
 
-function resolveTaskScriptPath(config: TriLCDaemonServiceConfig): string {
+function resolveTaskScriptPath(config: TriRLCDaemonServiceConfig): string {
   return path.join(resolveStateDir(config), "trilc-daemon.cmd");
 }
 
-function resolveTaskName(config: TriLCDaemonServiceConfig): string {
+function resolveTaskName(config: TriRLCDaemonServiceConfig): string {
   return config.label?.trim() || TRILC_TASK_NAME;
 }
 
@@ -47,7 +47,7 @@ function resolveTaskUser(): string | null {
   return domain ? `${domain}\\${username}` : username;
 }
 
-function buildTaskScript(config: TriLCDaemonServiceConfig): string {
+function buildTaskScript(config: TriRLCDaemonServiceConfig): string {
   const lines: string[] = ["@echo off"];
   const label = config.label || TRILC_TASK_NAME;
   // 纯 ASCII（装后验收①）：em-dash 在 GBK cmd.exe 下尾字节解析成 "m"
@@ -86,13 +86,13 @@ function execSchtasks(args: string[]): Promise<{ code: number; stdout: string; s
 
 // ── Service Operations ──
 
-async function isTaskRegistered(config: TriLCDaemonServiceConfig): Promise<boolean> {
+async function isTaskRegistered(config: TriRLCDaemonServiceConfig): Promise<boolean> {
   const taskName = resolveTaskName(config);
   const res = await execSchtasks(["/Query", "/TN", taskName]);
   return res.code === 0;
 }
 
-async function readTaskCommand(config: TriLCDaemonServiceConfig): Promise<{
+async function readTaskCommand(config: TriRLCDaemonServiceConfig): Promise<{
   programArguments: string[];
   workingDirectory?: string;
   environment?: Record<string, string>;
@@ -132,7 +132,7 @@ async function readTaskCommand(config: TriLCDaemonServiceConfig): Promise<{
   }
 }
 
-async function readTaskRuntime(config?: TriLCDaemonServiceConfig): Promise<{
+async function readTaskRuntime(config?: TriRLCDaemonServiceConfig): Promise<{
   status: "running" | "stopped" | "unknown";
   pid?: number;
 }> {
@@ -196,7 +196,7 @@ async function readTaskRuntime(config?: TriLCDaemonServiceConfig): Promise<{
   return { status: "unknown" };
 }
 
-async function stageService(config: TriLCDaemonServiceConfig): Promise<string> {
+async function stageService(config: TriRLCDaemonServiceConfig): Promise<string> {
   const stateDir = resolveStateDir(config);
   await fs.mkdir(stateDir, { recursive: true });
   const scriptPath = resolveTaskScriptPath(config);
@@ -206,7 +206,7 @@ async function stageService(config: TriLCDaemonServiceConfig): Promise<string> {
   return scriptPath;
 }
 
-async function installService(config: TriLCDaemonServiceConfig): Promise<void> {
+async function installService(config: TriRLCDaemonServiceConfig): Promise<void> {
   const scriptPath = await stageService(config);
   const taskName = resolveTaskName(config);
   const quotedScript = quoteSchtasksArg(scriptPath);
@@ -237,7 +237,7 @@ async function installService(config: TriLCDaemonServiceConfig): Promise<void> {
   console.log(`${LOG_PREFIX} installed scheduled task: ${taskName}`);
 }
 
-async function uninstallService(config: TriLCDaemonServiceConfig): Promise<void> {
+async function uninstallService(config: TriRLCDaemonServiceConfig): Promise<void> {
   const taskName = resolveTaskName(config);
   const taskExists = await isTaskRegistered(config);
 
@@ -256,7 +256,7 @@ async function uninstallService(config: TriLCDaemonServiceConfig): Promise<void>
   try { await fs.rmdir(stateDir); } catch { /* ignore */ }
 }
 
-async function stopService(config: TriLCDaemonServiceConfig): Promise<void> {
+async function stopService(config: TriRLCDaemonServiceConfig): Promise<void> {
   const taskName = resolveTaskName(config);
   const taskExists = await isTaskRegistered(config);
 
@@ -272,7 +272,7 @@ async function stopService(config: TriLCDaemonServiceConfig): Promise<void> {
   console.log(`${LOG_PREFIX} stopped scheduled task: ${taskName}`);
 }
 
-async function restartService(config: TriLCDaemonServiceConfig): Promise<DaemonServiceStartResult> {
+async function restartService(config: TriRLCDaemonServiceConfig): Promise<DaemonServiceStartResult> {
   const taskName = resolveTaskName(config);
   const taskExists = await isTaskRegistered(config);
 
@@ -294,7 +294,7 @@ async function restartService(config: TriLCDaemonServiceConfig): Promise<DaemonS
   return { outcome: "started", state };
 }
 
-async function readServiceState(config: TriLCDaemonServiceConfig): Promise<DaemonServiceState> {
+async function readServiceState(config: TriRLCDaemonServiceConfig): Promise<DaemonServiceState> {
   const taskName = resolveTaskName(config);
   const [installed, loaded, command, runtime] = await Promise.all([
     isTaskRegistered(config).catch(() => false),
@@ -321,7 +321,7 @@ async function readServiceState(config: TriLCDaemonServiceConfig): Promise<Daemo
 
 // ── Factory ──
 
-export function createSchtasksService(): TriLCDaemonService {
+export function createSchtasksService(): TriRLCDaemonService {
   return {
     stage: stageService,
     install: installService,

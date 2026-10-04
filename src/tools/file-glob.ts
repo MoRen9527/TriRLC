@@ -1,4 +1,4 @@
-// ── TriLC Glob tool ──
+// ── TriRLC Glob tool ──
 // CC-equivalent file pattern search using pure Node.js fs.readdirSync.
 // Supports **, *, ? glob patterns. No external dependencies.
 

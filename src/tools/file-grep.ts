@@ -1,4 +1,4 @@
-// ── TriLC Grep tool ──
+// ── TriRLC Grep tool ──
 // CC-equivalent content search. Tries system ripgrep (rg) first,
 // falls back to pure Node.js regex scan. Supports all CC grep features:
 // output_mode, context lines (-A/-B/-C), case-insensitive, glob filter,

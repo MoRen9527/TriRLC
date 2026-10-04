@@ -39,6 +39,17 @@ function v3Contract(agentId: string, extra?: V3ContractExtra): string {
     ...dr,
     'collaborators:',
     '  reports_to: ceo',
+    // v3 字段族现役形（LG-060 跟新；真源=source-agents v3：tools.runtime_equivalent + runtime_baseline 对象）
+    'tools:',
+    '  - name: read',
+    '    scope: [docs/]',
+    '    risk_level: low',
+    '    requires_approval: false',
+    '    runtime_equivalent: trimc:read_file',
+    'runtime_baseline:',
+    '  host: copilot-host',
+    '  tri_mc_status: planned',
+    '  tri_mc_migration_ready: false',
     'io_contract:',
     '  inputs:',
     '    - type: msg',
@@ -89,6 +100,16 @@ describe('AgentContractResolver', () => {
       forbidden: [],
     });
     assert.deepEqual(resolver.getToolControl('sample-agent'), { tools: ['read'] });
+    // v3 字段族断言（LG-060 跟新）：tools 投影含 runtime_equivalent；runtime_baseline 对象形透传
+    const tools = resolver.getTools('sample-agent');
+    assert.equal(tools?.length, 1);
+    assert.equal(tools?.[0].name, 'read');
+    assert.equal(tools?.[0].runtime_equivalent, 'trimc:read_file');
+    assert.deepEqual(resolver.getRuntimeBaseline('sample-agent'), {
+      host: 'copilot-host',
+      tri_mc_status: 'planned',
+      tri_mc_migration_ready: false,
+    });
   });
 
   it('uses agent body frontmatter when the dedicated frontmatter file is empty', async () => {

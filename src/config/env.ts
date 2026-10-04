@@ -1,4 +1,4 @@
-export type TriLCEnv = {
+export type TriRLCEnv = {
   nodeId: string;
   port: number;
   trimcBaseUrl: string;
@@ -44,7 +44,7 @@ import { fileURLToPath } from 'node:url';
 /**
  * 环境文件候选（纯函数，可测）。
  * r19-gate A1 扩展：安装态（C:\Program Files\TriCade）下 r19 三候选
- * （工作区根/TriLC 根/cwd）全部落空 → schtasks 实例 keys fetch 401。
+ * （工作区根/TriRLC 根/cwd）全部落空 → schtasks 实例 keys fetch 401。
  * 新增：
  *   1. TRILC_ENV_FILE 显式注入（部署层指路——cmd/任务里只放路径，不放密钥）
  *   2. dataDir 相邻 .env（TRILC_DATA_DIR ?? %LOCALAPPDATA%/trilc）——安装态可达
@@ -57,7 +57,7 @@ export function buildEnvFileCandidates(scriptDir: string, cwd: string): string[]
   const candidates: Array<string | undefined> = [
     explicit ? resolve(explicit) : undefined,
     resolve(scriptDir, '..', '..', '..', '.env'), // 工作区根 D:/Code/ai/.env（源码态）
-    resolve(scriptDir, '..', '..', '.env'),       // TriLC 根 .env
+    resolve(scriptDir, '..', '..', '.env'),       // TriRLC 根 .env
     dataDirEnv,                                   // dataDir 相邻（安装态 schtasks 可达）
     resolve(cwd, '.env'),
   ];
@@ -107,7 +107,7 @@ function resolveFromWorkspace(): string {
   const msiContracts = resolve(scriptDir, '..', '..', 'contracts');
   if (existsSync(msiContracts)) return msiContracts;
 
-  // Development workspace: TriCompany/source-agents next to TriLC
+  // Development workspace: TriCompany/source-agents next to TriRLC
   const devContracts = resolve(scriptDir, '..', '..', '..', 'TriCompany', 'source-agents');
   if (existsSync(devContracts)) return devContracts;
 
@@ -116,9 +116,9 @@ function resolveFromWorkspace(): string {
 }
 
 /**
- * Resolve TriLC version from:
+ * Resolve TriRLC version from:
  *  1. TRILC_VERSION env var (explicit override)
- *  2. version.json at the TriLC root (relative to this module)
+ *  2. version.json at the TriRLC root (relative to this module)
  *  3. Hardcoded fallback '1.0.0'
  *
  * Path derivation: this module compiles to dist/config/env.js,
@@ -146,7 +146,7 @@ function resolveVersion(): string {
   return '1.0.0';
 }
 
-export function readEnv(): TriLCEnv {
+export function readEnv(): TriRLCEnv {
   const nodeId = process.env.TRILC_NODE_ID ?? `${hostname()}-${process.pid}`;
   const dataDir = process.env.TRILC_DATA_DIR ?? `${process.env.LOCALAPPDATA ?? process.env.HOME ?? '/tmp'}/trilc`;
   const projectRoot = process.env.TRILC_PROJECT_ROOT ?? process.cwd();
@@ -157,7 +157,7 @@ export function readEnv(): TriLCEnv {
   return {
     nodeId,
     port: Number(process.env.TRILC_PORT ?? 8711),
-    // trimcBaseUrl：默认 127.0.0.1:8710=dev 同机形态（本机 TriMC 部署）；
+    // trimcBaseUrl：默认 127.0.0.1:8710=dev 同机形态（本机 TriMMC 部署）；
     // prod 覆盖走 env 注入（TRIMC_BASE_URL，LG-030 两形态并存合法性 2026-09-04）。
     trimcBaseUrl: process.env.TRIMC_BASE_URL ?? 'http://127.0.0.1:8710',
     openclawGatewayUrl: process.env.OPENCLOW_GATEWAY_URL ?? 'ws://127.0.0.1:8822',

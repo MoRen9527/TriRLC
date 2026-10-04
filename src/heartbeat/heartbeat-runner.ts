@@ -1,5 +1,5 @@
-// ── TriLC Heartbeat Runner ──
-// Per-agent heartbeat scheduling loop built on TriLCHeartbeatWake.
+// ── TriRLC Heartbeat Runner ──
+// Per-agent heartbeat scheduling loop built on TriRLCHeartbeatWake.
 // MVP: single agent with configurable interval.
 //
 // Scheduling loop:
@@ -13,7 +13,7 @@
 
 import {
   createHeartbeatWake,
-  type TriLCHeartbeatWake,
+  type TriRLCHeartbeatWake,
   type HeartbeatRunResult,
 } from "./heartbeat-wake.js";
 import { runHeartbeatAgent } from "./agent-runner.js";
@@ -56,7 +56,7 @@ interface AgentRuntimeState extends HeartbeatAgentConfig {
   running: boolean;
 }
 
-export interface TriLCHeartbeatRunner {
+export interface TriRLCHeartbeatRunner {
   /** Whether the scheduling loop is active. */
   readonly isRunning: boolean;
   /** Registered agent count (healthz 实际读数，P2 顺手件 F4 兑现). */
@@ -100,8 +100,8 @@ export function createHeartbeatRunner(opts: {
     updateSessionStatus(sessionId: string, status: SessionRecord["status"]): void;
   };
   cwd: string;
-}): TriLCHeartbeatRunner {
-  const wake: TriLCHeartbeatWake = createHeartbeatWake();
+}): TriRLCHeartbeatRunner {
+  const wake: TriRLCHeartbeatWake = createHeartbeatWake();
   const { sessionStore, cwd } = opts;
 
   let agents = new Map<string, AgentRuntimeState>();

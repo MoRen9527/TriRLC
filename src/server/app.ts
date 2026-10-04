@@ -1,5 +1,5 @@
-// ── TriLC Local HTTP Server ──
-// Exposes the same API surface as TriMC:
+// ── TriRLC Local HTTP Server ──
+// Exposes the same API surface as TriMMC:
 //   GET  /healthz              → { ok: true, service: 'trilc' }
 //   GET  /v1/models            → Anthropic-compatible model list
 //   GET  /models               → OpenAI-compatible model list
@@ -7,8 +7,8 @@
 //   POST /chat/completions     → OpenAI Chat Completions API (SSE + JSON)
 //   POST /internal/v1/agent    → SSE + JSON modes (agentLoop from @tricompany/agent-core)
 //
-// TriLC does NOT load pipeline (Soul Loader / Memory Injector / Context Builder / Tool Gater).
-// Those are TriMC-only services. Local mode uses legacy raw mode directly.
+// TriRLC does NOT load pipeline (Soul Loader / Memory Injector / Context Builder / Tool Gater).
+// Those are TriMMC-only services. Local mode uses legacy raw mode directly.
 
 import { createServer, type IncomingHttpHeaders, type Server, type ServerResponse } from 'node:http';
 import { request as httpRequest } from 'node:http';
@@ -17,7 +17,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import type { TriLCEnv } from '../config/env.js';
+import type { TriRLCEnv } from '../config/env.js';
 import { resolveWeeklyPlaneRoot } from '../project/weekly-plane-root.js';
 import { agentLoop, register as registerTool, canUseTool } from '@tricompany/agent-core';
 import type { AgentEvent, AgentLoopOptions, AgentLoopDeps } from '@tricompany/agent-core';
@@ -62,7 +62,7 @@ import {
   requestInteraction,
 } from './interactions.js';
 import { createHeartbeatWake } from '../heartbeat/heartbeat-wake.js';
-import { createHeartbeatRunner, type TriLCHeartbeatRunner, type HeartbeatAgentConfig } from '../heartbeat/heartbeat-runner.js';
+import { createHeartbeatRunner, type TriRLCHeartbeatRunner, type HeartbeatAgentConfig } from '../heartbeat/heartbeat-runner.js';
 import { CompanyInitState } from '../company/init-state.js';
 import { getContractResolver } from '../config/contract-resolver.js';
 import { InitChain } from '../company/init-chain.js';
@@ -849,7 +849,7 @@ async function askPermissionViaTui(
 }
 
 // ── ConnectionManager ──
-// Tracks TriMC reachability for fast fallback decisions.
+// Tracks TriMMC reachability for fast fallback decisions.
 // CTO-008-M spec: 3 consecutive failures → DEGRADED → 2 consecutive successes → CONNECTED
 // Uses POST /internal/v1/heartbeat with node metadata instead of bare GET /healthz.
 // On recovery (DEGRADED→CONNECTED), triggers event replay via POST /internal/v1/events/replay.
@@ -914,7 +914,7 @@ class ConnectionManager {
     this._applyReplayResponse = opts.applyReplayResponse ?? (() => {});
     this.startTime = Date.now();
     if (this.state === 'local') {
-      console.log('[trilc:conn] running in local mode — TriMC not configured');
+      console.log('[trilc:conn] running in local mode — TriMMC not configured');
     }
   }
 
@@ -963,7 +963,7 @@ class ConnectionManager {
     }
   }
 
-  // Send enhanced heartbeat to TriMC POST /internal/v1/heartbeat
+  // Send enhanced heartbeat to TriMMC POST /internal/v1/heartbeat
   async checkHealth(): Promise<boolean> {
     try {
       const ok = await postHeartbeat(this.trimcBaseUrl, {
@@ -1049,9 +1049,9 @@ class ConnectionManager {
     this.recoveryCallback = cb;
   }
 
-  // Replay pending events to TriMC after recovery from degraded state
+  // Replay pending events to TriMMC after recovery from degraded state
   private async _performReplay(): Promise<void> {
-    // Use internal connectionId tracker set in createTriLCApp
+    // Use internal connectionId tracker set in createTriRLCApp
     const cid = (this as unknown as { __connectionId: string }).__connectionId ?? '';
     const events = this._getPendingForReplay(cid);
     if (events.length === 0) {
@@ -1134,15 +1134,15 @@ class ConnectionManager {
   /** 2.5: Get state info for task/submit response notification. */
   getStateInfo(): { connectionState: ConnectionState; warning?: string } {
     if (this.state === 'degraded') {
-      return { connectionState: 'degraded', warning: 'TriMC unreachable, using local fallback' };
+      return { connectionState: 'degraded', warning: 'TriMMC unreachable, using local fallback' };
     }
     if (this.state === 'local') {
-      return { connectionState: 'local', warning: 'TriMC not configured, running standalone' };
+      return { connectionState: 'local', warning: 'TriMMC not configured, running standalone' };
     }
     return { connectionState: 'connected' };
   }
 
-  // Allow setting connectionId externally (used by createTriLCApp)
+  // Allow setting connectionId externally (used by createTriRLCApp)
   _setConnectionId(id: string): void {
     (this as unknown as { __connectionId: string }).__connectionId = id;
   }
@@ -1199,8 +1199,8 @@ function postHeartbeat(baseUrl: string, hb: {
   });
 }
 
-// ── Post replay events to TriMC ──
-// CTO-008-M §3.3.2. Sends queued offline events to TriMC for merge/arbitration.
+// ── Post replay events to TriMMC ──
+// CTO-008-M §3.3.2. Sends queued offline events to TriMMC for merge/arbitration.
 async function postReplay(
   baseUrl: string,
   payload: { nodeId: string; connectionId: string; events: ReplayEventItem[] },
@@ -1249,7 +1249,7 @@ async function postReplay(
   });
 }
 
-// ── Proxy agent request to TriMC ──
+// ── Proxy agent request to TriMMC ──
 // Used as inline logic in the request handler; kept here for potential standalone usage.
 
 // ── Task stream state ──
@@ -1289,7 +1289,7 @@ function buildSummary(entry: TaskStreamEntry): string {
   return entry.message.slice(0, 200);
 }
 
-export function createTriLCApp(env: TriLCEnv) {
+export function createTriRLCApp(env: TriRLCEnv) {
   let server: Server | null = null;
   let daemonStartTime = 0;
   const eventQueue = createEventQueue({
@@ -1447,7 +1447,7 @@ export function createTriLCApp(env: TriLCEnv) {
   })();
 
   // ── Heartbeat Runner ──
-  const heartbeatRunner: TriLCHeartbeatRunner = createHeartbeatRunner({
+  const heartbeatRunner: TriRLCHeartbeatRunner = createHeartbeatRunner({
     sessionStore: {
       createSession(s) { sessionStore.createSession(s); },
       saveMessages(id, msgs) { sessionStore.saveMessages(id, msgs as any); },
@@ -1500,7 +1500,7 @@ export function createTriLCApp(env: TriLCEnv) {
   };
   resetConnectionId();
 
-  // 2.5: 'local' state when TriMC is not configured
+  // 2.5: 'local' state when TriMMC is not configured
   const isLocal = !env.trimcBaseUrl || env.trimcBaseUrl === 'http://localhost:8710' && !env.trimcBaseUrl;
   const connMgr = new ConnectionManager(env.trimcBaseUrl || 'http://localhost:8710', {
     nodeId: env.nodeId,
@@ -1523,7 +1523,7 @@ export function createTriLCApp(env: TriLCEnv) {
   });
 
   // ── S7: TaskMirrorPusher ──
-  // Event-driven task state push to TriMC mirror endpoint.
+  // Event-driven task state push to TriMMC mirror endpoint.
   // Builds snapshots from taskStreams (in-memory) + sessionStore (persisted).
   const getActiveSnapshots = (): MirrorTaskSnapshot[] => {
     const snapshots: MirrorTaskSnapshot[] = [];
@@ -1598,8 +1598,8 @@ export function createTriLCApp(env: TriLCEnv) {
       // P4.2: Register shell_exec tool backed by ProcessSupervisor
       registerShellExecTool({ supervisor: getDefaultSupervisor() });
 
-      // 2.1/2.2: Post task result back to TriMC when connected or callback URL configured
-      const postTaskResultToTriMC = async (
+      // 2.1/2.2: Post task result back to TriMMC when connected or callback URL configured
+      const postTaskResultToTriMMC = async (
         sessionId: string, status: 'success' | 'failed', result?: string, error?: string,
       ): Promise<void> => {
         const callbackUrl = process.env.TRILC_TRIMC_CALLBACK_URL
@@ -1611,9 +1611,9 @@ export function createTriLCApp(env: TriLCEnv) {
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ sessionId, status, result, error }),
           });
-          console.log(`[trilc:task] result posted to TriMC: ${sessionId} status=${status}`);
+          console.log(`[trilc:task] result posted to TriMMC: ${sessionId} status=${status}`);
         } catch (err) {
-          console.warn(`[trilc:task] failed to post result to TriMC: ${(err as Error).message}`);
+          console.warn(`[trilc:task] failed to post result to TriMMC: ${(err as Error).message}`);
         }
       };
 
@@ -1741,7 +1741,7 @@ export function createTriLCApp(env: TriLCEnv) {
           res.writeHead(200, { 'content-type': 'application/json' });
           res.end(JSON.stringify({
             ok: true,
-            service: 'trirlc',
+            service: 'trilc',
             serverTime: new Date().toISOString(),
             // LG-033 mc_link/mc_peer 双字段（BOD 热重建批 2026-09-08）：自识别面
             // 归属无需问人；trimc 旧字段保留一版双写（消费方全迁移后下批退役）。
@@ -1794,7 +1794,7 @@ export function createTriLCApp(env: TriLCEnv) {
           return;
         }
 
-        // X-Internal-Token 认证门（fail-closed）：参照 TriMC 的实现是「未配置
+        // X-Internal-Token 认证门（fail-closed）：参照 TriMMC 的实现是「未配置
         // 即放行」的兼容变体；本面有三条任意命令执行通道，缺省必须全拒。
         // token 于请求期读取（不缓存启动快照），支持运行中注入测试。
         const gateInternalToken = process.env.TRILC_INTERNAL_TOKEN ?? '';
@@ -2141,7 +2141,7 @@ export function createTriLCApp(env: TriLCEnv) {
 
         // ── GET /internal/v1/init/sync/status ──
         // I4：五维同步状态投影（两入口渲染 + 诊断卡数据源）。remote = 拉取
-        // TriMC config/sync/status（超时 3s 降级 null，§6.8 降级口径）。
+        // TriMMC config/sync/status（超时 3s 降级 null，§6.8 降级口径）。
         if (req.url === '/internal/v1/init/sync/status' && req.method === 'GET') {
           try {
             const payload = await getSyncStatus(initSyncDeps);
@@ -2156,7 +2156,7 @@ export function createTriLCApp(env: TriLCEnv) {
 
         // ── GET /internal/v1/init/confirm/check ──
         // I4 Phase D（§六.1）：L1-L4 协同确认按需计算（无后台常驻轮询）。
-        // 数据源 = 注册点 ↔ 本地 bundle ↔ TriMC status.project/fleetHead
+        // 数据源 = 注册点 ↔ 本地 bundle ↔ TriMMC status.project/fleetHead
         // 三面；远程不可达 → degraded 口径（remote: null）。
         if (req.url === '/internal/v1/init/confirm/check' && req.method === 'GET') {
           try {
@@ -2816,7 +2816,7 @@ export function createTriLCApp(env: TriLCEnv) {
           const urlObj = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
           const queryString = urlObj.search; // e.g. ?stream=true
 
-          // ── Proxy to TriMC if connected ──
+          // ── Proxy to TriMMC if connected ──
           if (connMgr.currentState === 'connected') {
             try {
               // Use a flag tracked via a simple wrapper to detect proxy failure
@@ -2862,7 +2862,7 @@ export function createTriLCApp(env: TriLCEnv) {
               });
               return; // Successfully proxied
             } catch {
-              // TriMC unreachable — fall through to local agentLoop
+              // TriMMC unreachable — fall through to local agentLoop
               console.log('[trilc] trimc unreachable, using local agentLoop');
             }
           }
@@ -2949,7 +2949,7 @@ export function createTriLCApp(env: TriLCEnv) {
               id: m.id,
               object: 'model',
               created: Math.floor(new Date(m.createdAt).getTime() / 1000),
-              owned_by: 'trirlc',
+              owned_by: 'trilc',
             })),
           }));
           return;
@@ -3905,8 +3905,8 @@ export function createTriLCApp(env: TriLCEnv) {
                 : 'Task completed',
             });
 
-            // 2.1/2.2: Post result back to TriMC
-            postTaskResultToTriMC(sessionId, 'success', deltaContent || undefined).catch(() => {});
+            // 2.1/2.2: Post result back to TriMMC
+            postTaskResultToTriMMC(sessionId, 'success', deltaContent || undefined).catch(() => {});
 
             // Persist session as completed
             try {
@@ -3924,8 +3924,8 @@ export function createTriLCApp(env: TriLCEnv) {
             entry.status = 'error';
             publish({ type: 'task:failed', taskId: sessionId, error: msg });
             writeSSE('task_error', { status: 'failed', error: msg });
-            // 2.1/2.2: Post failure result back to TriMC
-            postTaskResultToTriMC(sessionId, 'failed', undefined, msg).catch(() => {});
+            // 2.1/2.2: Post failure result back to TriMMC
+            postTaskResultToTriMMC(sessionId, 'failed', undefined, msg).catch(() => {});
 
             try {
               sessionStore.updateSessionStatus(sessionId, 'error');
@@ -4835,7 +4835,7 @@ export function createTriLCApp(env: TriLCEnv) {
           maxTurns: 6,
           permissionRules: LEAD_TOOL_ALLOW_RULES,
           systemPrompt: [
-            `你是 TriLC 业务组长「${LEAD_AGENT_ID}」（LG-026 注册制组长，事件驱动唤醒，单次唤醒办完即眠）。`,
+            `你是 TriRLC 业务组长「${LEAD_AGENT_ID}」（LG-026 注册制组长，事件驱动唤醒，单次唤醒办完即眠）。`,
             '职责：①查收待投信件（letter_list_pending）并逐封投递（letter_deliver）；',
             '②重要件/急件超时未读时按公开标准形式复核，复核通过则升级（letter_escalate，升级链固定 组长→COS→BOD，终裁升级权在 COS）；',
             '③需要回信或通报时以组长名义寄信（send_letter）；④办理过程的关键动作查台账（ledger_read）核对留痕。',

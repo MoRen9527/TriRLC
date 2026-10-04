@@ -1,8 +1,8 @@
-# TriLC Registry Layer
+# TriRLC Registry Layer
 
 ## 作用
 
-本目录承接 `TriLCBusinessStrategyRegistry`、`TriLCProductRegistry` 和 `TriLCCodeRegistry` 的工作型资料。
+本目录承接 `TriRLCBusinessStrategyRegistry`、`TriRLCProductRegistry` 和 `TriRLCCodeRegistry` 的工作型资料。
 
 ## 真源优先级
 
@@ -12,9 +12,9 @@
 
 ## 当前文件
 
-- `business-state.md`：TriLC 的商业定位、默认职责与边界
-- `product-state.md`：TriLC 的产品状态、模块职责与依赖
-- `code-state.md`：TriLC 的代码结构、健康状态与风险
+- `business-state.md`：TriRLC 的商业定位、默认职责与边界
+- `product-state.md`：TriRLC 的产品状态、模块职责与依赖
+- `code-state.md`：TriRLC 的代码结构、健康状态与风险
 
 ## 更新规则
 

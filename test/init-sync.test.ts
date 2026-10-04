@@ -479,7 +479,7 @@ describe('init-sync 幂等重跑与 push 失败分类', () => {
 
 describe('init-sync status + 启动 re-sync 检查', () => {
   it('remote 可达 → 映射 applied/fleetHead/dims；不可达 → null（降级）', async () => {
-    // 本地 HTTP 桩：模拟 TriMC config/sync/status
+    // 本地 HTTP 桩：模拟 TriMMC config/sync/status
     let server: Server | null = null;
     server = createServer((req, res) => {
       res.writeHead(200, { 'content-type': 'application/json' });

@@ -1,4 +1,4 @@
-// ── TriLC Key Cache → config-cache（LG-058 N3 泛化）──
+// ── TriRLC Key Cache → config-cache（LG-058 N3 泛化）──
 // LG-058 P0③ (2026-09-28): 机制从「keys 单维」泛化为「config 多维」
 // （keys + default_model + 策略摘要 strategy），tier1 拉取端点从
 // /v1/config/keys 换为 /v1/config/cards/{face}?view=pull（CTO 方案 §三
@@ -275,7 +275,7 @@ let _onKeyCacheUpdated: KeyCacheUpdatedCallback | null = null;
 
 /**
  * Register a callback to be invoked when the key cache is refreshed.
- * Used by TriLC consumer layer to re-initialize ModelClient with fresh keys.
+ * Used by TriRLC consumer layer to re-initialize ModelClient with fresh keys.
  */
 export function onKeyCacheUpdated(callback: KeyCacheUpdatedCallback): void {
   _onKeyCacheUpdated = callback;

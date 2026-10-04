@@ -1,5 +1,5 @@
-// ── TriLC Sync Engine Types ──
-// Session cloud sync: TriLC → TriMC (Phase 1 single-direction)
+// ── TriRLC Sync Engine Types ──
+// Session cloud sync: TriRLC → TriMMC (Phase 1 single-direction)
 //
 // 17 type contracts across this module:
 //   types.ts:     SyncResult, BatchSyncResult, SyncEngineConfig, SyncRequestPayload,
@@ -7,13 +7,13 @@
 //                 SyncUnavailableResponse, SyncErrorResponse, DEFAULT_SYNC_CONFIG (10)
 //   retry.ts:     RetryConfig, RetryAttempt (2)
 //   sync-engine.ts: SyncEngineDeps (1)
-//   + 5 function contracts: buildSyncPayload, fetchWithRetry, syncSessionToTriMC,
+//   + 5 function contracts: buildSyncPayload, fetchWithRetry, syncSessionToTriMMC,
 //                            syncPendingSessions, isRetryable/isTimeoutError
 
 /** 单次同步操作结果 */
 export interface SyncResult {
   ok: boolean;
-  cloudSessionId?: string;     // 成功时 TriMC 返回的云端 ID
+  cloudSessionId?: string;     // 成功时 TriMMC 返回的云端 ID
   syncedMessageCount?: number;  // 成功时同步消息数
   error?: string;               // 失败时的错误信息
   retried?: boolean;            // 是否经历了重试
@@ -29,7 +29,7 @@ export interface BatchSyncResult {
 
 /** 同步引擎配置 */
 export interface SyncEngineConfig {
-  /** TriMC base URL，如 "http://127.0.0.1:8710" */
+  /** TriMMC base URL，如 "http://127.0.0.1:8710" */
   trimcBaseUrl: string;
   /** 本节点 ID */
   nodeId: string;
@@ -51,7 +51,7 @@ export const DEFAULT_SYNC_CONFIG: Required<SyncEngineConfig> = {
 };
 
 /**
- * 构建发送给 TriMC 的同步 payload。
+ * 构建发送给 TriMMC 的同步 payload。
  * nodeId + localSessionId 组成幂等键。
  */
 export interface SyncRequestPayload {
@@ -81,7 +81,7 @@ export interface SyncMessagePayload {
   toolCallId?: string | null;
 }
 
-/** TriMC 200 OK 响应 */
+/** TriMMC 200 OK 响应 */
 export interface SyncSuccessResponse {
   ok: true;
   cloudSessionId: string;
@@ -90,7 +90,7 @@ export interface SyncSuccessResponse {
   syncedAt: string;
 }
 
-/** TriMC 409 Conflict 响应（去重） */
+/** TriMMC 409 Conflict 响应（去重） */
 export interface SyncConflictResponse {
   ok: false;
   error: 'duplicate_session';
@@ -98,14 +98,14 @@ export interface SyncConflictResponse {
   existingCloudSessionId: string;
 }
 
-/** TriMC 503 不可用响应 */
+/** TriMMC 503 不可用响应 */
 export interface SyncUnavailableResponse {
   ok: false;
   error: 'service_unavailable';
   message: string;
 }
 
-/** TriMC 错误响应联合类型 */
+/** TriMMC 错误响应联合类型 */
 export type SyncErrorResponse =
   | SyncConflictResponse
   | SyncUnavailableResponse

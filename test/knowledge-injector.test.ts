@@ -604,6 +604,17 @@ describe('knowledge-injector — session-initializer main path', () => {
           '    - skip tests',
           'collaborators:',
           '  reports_to: ceo',
+          // v3 字段族现役形（LG-060 跟新；真源=source-agents v3）
+          'tools:',
+          '  - name: read',
+          '    scope: [docs/]',
+          '    risk_level: low',
+          '    requires_approval: false',
+          '    runtime_equivalent: trimc:read_file',
+          'runtime_baseline:',
+          '  host: copilot-host',
+          '  tri_mc_status: planned',
+          '  tri_mc_migration_ready: false',
           'io_contract:',
           '  inputs:',
           '    - type: msg',
@@ -643,6 +654,14 @@ describe('knowledge-injector — session-initializer main path', () => {
     const socIdx = config.systemPrompt.indexOf('## Social');
     assert.ok(memIdx > -1 && colIdx > memIdx && socIdx > colIdx);
     assert.ok(config.systemPrompt.includes('知识记忆层'));
+    // v3 字段族断言（LG-060 跟新）：主路径 initializeSession 透传 tools/runtime_baseline
+    assert.equal(config.tools.length, 1);
+    assert.equal(config.tools[0]?.runtime_equivalent, 'trimc:read_file');
+    assert.deepEqual(config.runtime_baseline, {
+      host: 'copilot-host',
+      tri_mc_status: 'planned',
+      tri_mc_migration_ready: false,
+    });
 
     // 主路径注入：会话尚未创建 → 消费记录 session_id 为 null
     const store = createKnowledgeStore(getKnowledgeDbPath(projectRoot), { projectRoot });

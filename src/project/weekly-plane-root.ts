@@ -1,11 +1,11 @@
 // ── Weekly Plane Root Resolver (r2-2, prod-grade-2-trilc-plane-view) ──
 // Resolves the company weekly plane root (TriMetaverse/docs/workflow/operating-records)
-// as a READ-ONLY shared view for TriLC. Never created, never written by TriLC —
+// as a READ-ONLY shared view for TriRLC. Never created, never written by TriRLC —
 // write ownership of weekly plane files stays with the orchestration layer.
 //
 // Resolution order (design r2-1 §2.1):
 //   1. TRILC_WEEKLY_PLANE_ROOT env (explicit, both source and installed states)
-//   2. Workspace sibling discovery: <TriLC-root>/../TriMetaverse/docs/workflow/
+//   2. Workspace sibling discovery: <TriRLC-root>/../TriMetaverse/docs/workflow/
 //      operating-records (source state only, existsSync-confirmed)
 //   3. undefined → project-track legacy behavior, byte-for-byte unchanged
 //
@@ -36,7 +36,7 @@ export function resolveWeeklyPlaneRoot(): string | undefined {
   //    This module lives at src/project/ (compiled: dist/project/) — three
   //    levels below the workspace root D:/Code/ai, so three '..' hops land on
   //    the sibling TriMetaverse checkout. (Two hops would land INSIDE the
-  //    TriLC repo — r2-3 regression: fixed from '..', '..'.)
+  //    TriRLC repo — r2-3 regression: fixed from '..', '..'.)
   const scriptDir = dirname(fileURLToPath(import.meta.url));
   const sibling = resolve(scriptDir, '..', '..', '..', ...WEEKLY_PLANE_SEGMENTS);
   if (existsSync(sibling)) return sibling;

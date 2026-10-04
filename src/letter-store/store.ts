@@ -1,4 +1,4 @@
-// ── TriLC Letter Store (SQLite) ──
+// ── TriRLC Letter Store (SQLite) ──
 // LG-026 P1 数据层：信件 DB（letters + ledger 分表）。
 // Uses Node 22 built-in node:sqlite (same pattern as session-store / event-queue store).
 //

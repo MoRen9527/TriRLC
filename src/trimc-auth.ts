@@ -1,7 +1,7 @@
 /**
  * trimc-auth — TriMMC /internal/* token 鉴权全局 fetch 包装（P0 加固配套，2026-08-25）。
  *
- * 服务器 TriMC 已启用 TRIMC_INTERNAL_TOKEN 强制校验（TriMC 9fc919e）。本模块在
+ * 服务器 TriMMC 已启用 TRIMC_INTERNAL_TOKEN 强制校验（TriMMC 9fc919e）。本模块在
  * 进程启动时安装一次全局 fetch 包装：凡请求 TRIMC_BASE_URL 主机的 /internal/
  * 路径，自动附加 X-Internal-Token 头——单点覆盖全部 181+ 调用面（含未来新增），
  * 各调用点无需感知 token 存在与否（未配置时零行为变化）。

@@ -83,7 +83,7 @@ export interface InitSyncDeps {
   companyState: CompanyInitState;
   registry: ProjectRegistry;
   publish: (event: LocalBusEvent) => void;
-  /** TriMC 状态端点基址（env.trimcBaseUrl）。 */
+  /** TriMMC 状态端点基址（env.trimcBaseUrl）。 */
   trimcBaseUrl: string;
   trilcVersion: string;
   nodeId: string;
@@ -657,7 +657,7 @@ export async function getSyncStatus(deps: InitSyncDeps): Promise<SyncStatusPaylo
 }
 
 /**
- * 拉取 TriMC config/sync/status（超时 3s 降级 null，§6.8）。
+ * 拉取 TriMMC config/sync/status（超时 3s 降级 null，§6.8）。
  * 导出供 init-confirm.ts（Phase D check 的服务器侧事实源）复用。
  */
 export async function fetchRemoteSyncStatus(deps: InitSyncDeps): Promise<SyncStatusRemote | null> {

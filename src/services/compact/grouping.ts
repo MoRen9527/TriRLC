@@ -1,15 +1,15 @@
-// ── Message Grouping (CC grouping.ts adapted for TriLC) ──
+// ── Message Grouping (CC grouping.ts adapted for TriRLC) ──
 // Groups messages at conversation-turn boundaries: one group per user-assistant exchange.
-// Adapted from CC groupMessagesByApiRound for TriLC's simpler Message structure.
+// Adapted from CC groupMessagesByApiRound for TriRLC's simpler Message structure.
 
-export interface TriLCMessage {
+export interface TriRLCMessage {
   role: 'user' | 'assistant';
   content: string;
 }
 
-export function groupMessagesByTurn(messages: TriLCMessage[]): TriLCMessage[][] {
-  const groups: TriLCMessage[][] = [];
-  let current: TriLCMessage[] = [];
+export function groupMessagesByTurn(messages: TriRLCMessage[]): TriRLCMessage[][] {
+  const groups: TriRLCMessage[][] = [];
+  let current: TriRLCMessage[] = [];
 
   for (const msg of messages) {
     // Start new group when hitting a user message after an assistant
@@ -32,6 +32,6 @@ export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
-export function estimateMessageTokens(messages: TriLCMessage[]): number {
+export function estimateMessageTokens(messages: TriRLCMessage[]): number {
   return messages.reduce((sum, m) => sum + estimateTokens(m.content), 0);
 }

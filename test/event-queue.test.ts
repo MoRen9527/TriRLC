@@ -1,5 +1,5 @@
 // ── M.1 Event Queue Unit Tests ──
-// Tests for TriLC/src/event-queue/* — SQLite persistence, enqueue, replay cycle.
+// Tests for TriRLC/src/event-queue/* — SQLite persistence, enqueue, replay cycle.
 // Uses Node 22 native test runner + node:sqlite (in-memory).
 
 import { describe, it, beforeEach, afterEach } from 'node:test';

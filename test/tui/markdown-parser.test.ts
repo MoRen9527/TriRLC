@@ -124,7 +124,7 @@ describe('V-004 CJK handling in Markdown parser', () => {
   });
 
   it('Mixed Chinese and English — parses correctly', () => {
-    const tokens = lexer('TriLC终端TUI测试V1.0') as Token[];
+    const tokens = lexer('TriRLC终端TUI测试V1.0') as Token[];
     assert.equal(tokens[0].type, 'paragraph');
   });
 

@@ -1,5 +1,5 @@
-// ── TriLC Cron Store ──
-// SQLite persistence for cron jobs (cron.db in the TriLC data directory).
+// ── TriRLC Cron Store ──
+// SQLite persistence for cron jobs (cron.db in the TriRLC data directory).
 // Schema is auto-created on first access.
 //
 // Phase 2: minimal CRUD + startup load.

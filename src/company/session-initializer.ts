@@ -1,10 +1,10 @@
 // ── Employee Session Initializer ──
-// 6.4 会话初始化器（本地 TriLC 端）：员工会话启动统一入口
+// 6.4 会话初始化器（本地 TriRLC 端）：员工会话启动统一入口
 // 合同加载（contract-resolver 装配）→ 五件套装配校验 → 工作目录就绪
 //
 // 与 onboarding.ts（公司开张一次性引导）区分：本模块是员工级会话初始化，
-// 每次员工会话启动时调用，产出运行时配置。服务器 TriMC 侧同构实现见
-// TriMC/src/onboarding/session-initializer.ts（同源 v2 合同，互为 fallback）。
+// 每次员工会话启动时调用，产出运行时配置。服务器 TriMMC 侧同构实现见
+// TriMMC/src/onboarding/session-initializer.ts（同源 v2 合同，互为 fallback）。
 
 import { mkdir, access } from 'node:fs/promises';
 import { constants } from 'node:fs';
@@ -22,6 +22,9 @@ export interface SessionConfig {
   systemPrompt: string;
   decisionRights: AgentContract['decisionRights'];
   toolControl: Record<string, unknown>;
+  /** v3 字段族（LG-060 跟新）：工具面含 runtime_equivalent；运行时基线对象形透传。 */
+  tools: AgentContract['tools'];
+  runtime_baseline: AgentContract['runtime_baseline'];
   employeeInfo?: EmployeeRosterEntry;
   workspaceRoot: string;
   readyAt: string;
@@ -77,6 +80,8 @@ export async function initializeSession(
   });
 
   const toolControl = resolver.getToolControl(agentId) ?? {};
+  const tools = resolver.getTools(agentId) ?? [];
+  const runtimeBaseline = resolver.getRuntimeBaseline(agentId);
   const employeeInfo = resolver.getEmployeeInfo(agentId);
   const dir = await ensureWorkspaceDir(workspaceRoot);
 
@@ -85,6 +90,8 @@ export async function initializeSession(
     systemPrompt: injected.prompt,
     decisionRights,
     toolControl,
+    tools,
+    runtime_baseline: runtimeBaseline,
     employeeInfo,
     workspaceRoot: dir,
     readyAt: new Date().toISOString(),

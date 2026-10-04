@@ -1,4 +1,4 @@
-# TriLC CLI TUI T2 — 体验打磨验证测试报告
+# TriRLC CLI TUI T2 — 体验打磨验证测试报告
 
 - **任务编号**: trilc-tui-polish-3
 - **测试工程师**: 小柯
@@ -211,7 +211,7 @@ useEffect(() => {
 | `server/` | `src/server/` | 存在 | 含 `anthropic-stream.ts` / `app.ts` / `openai-stream.ts`，均为 daemon 侧文件，无 TUI T2 变化 | ✅ 未被触碰 |
 | `cli.ts` | `src/cli.ts` | 存在 | 536 行 CLI 入口，`cmdChat` 调用 `startTUI()`（T1 已存在），无 T2 新增逻辑 | ✅ 未被触碰 |
 
-**说明**: `src/tui/vendor/` 目录不存在。T1 报告中提到的 `vendor/` 实际位于 TriLC 项目根级别 (`vendor/claude-code-tui/ink/`)，其内容已被吸收至 `src/tui/ink/`。T2 未涉及 vendor 目录的任何变更。
+**说明**: `src/tui/vendor/` 目录不存在。T1 报告中提到的 `vendor/` 实际位于 TriRLC 项目根级别 (`vendor/claude-code-tui/ink/`)，其内容已被吸收至 `src/tui/ink/`。T2 未涉及 vendor 目录的任何变更。
 
 ✅ **PASS** — 6 项不变项全部确认未被触碰。
 
@@ -241,15 +241,15 @@ T2 三项体验打磨功能全部通过验证：
 
 ## 使用依据
 
-- `TriLC/src/tui/hooks/useChat.ts` — chat 状态管理（T2 扩展）
-- `TriLC/src/tui/hooks/useSSE.ts` — SSE 流解析（T2 扩展）
-- `TriLC/src/tui/components/Messages.tsx` — 消息列表容器
-- `TriLC/src/tui/components/MessageResponse.tsx` — 单条消息渲染
-- `TriLC/src/tui/components/ToolCallLine.tsx` — 工具调用行组件（新）
-- `TriLC/src/tui/app.tsx` — TUI 根组件
-- `TriLC/src/tui/render.tsx` — TUI 启动器（SIGINT handler）
-- `TriLC/src/tui/components/Spinner.tsx` — 不变项（对照）
-- `TriLC/src/tui/components/PromptInput.tsx` — 不变项（对照）
-- `TriLC/src/tui/components/Markdown.tsx` — 不变项（对照）
-- `TriLC/src/cli.ts` — 不变项（对照）
-- `TriLC/src/server/` — 不变项（对照）
+- `TriRLC/src/tui/hooks/useChat.ts` — chat 状态管理（T2 扩展）
+- `TriRLC/src/tui/hooks/useSSE.ts` — SSE 流解析（T2 扩展）
+- `TriRLC/src/tui/components/Messages.tsx` — 消息列表容器
+- `TriRLC/src/tui/components/MessageResponse.tsx` — 单条消息渲染
+- `TriRLC/src/tui/components/ToolCallLine.tsx` — 工具调用行组件（新）
+- `TriRLC/src/tui/app.tsx` — TUI 根组件
+- `TriRLC/src/tui/render.tsx` — TUI 启动器（SIGINT handler）
+- `TriRLC/src/tui/components/Spinner.tsx` — 不变项（对照）
+- `TriRLC/src/tui/components/PromptInput.tsx` — 不变项（对照）
+- `TriRLC/src/tui/components/Markdown.tsx` — 不变项（对照）
+- `TriRLC/src/cli.ts` — 不变项（对照）
+- `TriRLC/src/server/` — 不变项（对照）

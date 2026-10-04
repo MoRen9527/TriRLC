@@ -2,7 +2,7 @@
 // L1 三面比对矩阵（repoUrl/projectKey/worktreePath 短指纹）、L2 三值一致/
 // 落后领先/降级口径、L3 写读闭环、readyForConfirm 门禁、POST confirm
 // 链态门/防重入/成功转移 ready + 快照 + 事件。注入：临时目录 + scripted
-// git + HTTP 桩（模拟 TriMC status）。
+// git + HTTP 桩（模拟 TriMMC status）。
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
@@ -123,7 +123,7 @@ function buildDeps(git: GitRunner, trimcBaseUrl: string, overrides?: object): Pa
   };
 }
 
-/** HTTP 桩：模拟 TriMC config/sync/status 响应。 */
+/** HTTP 桩：模拟 TriMMC config/sync/status 响应。 */
 async function withStatusServer(
   payload: Record<string, unknown>,
   fn: (baseUrl: string) => Promise<void>,

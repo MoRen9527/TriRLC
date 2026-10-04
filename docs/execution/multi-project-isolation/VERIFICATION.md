@@ -34,7 +34,7 @@ Cross-project agent-memory access is prohibited at the routing layer.
 ### 2.1 `deriveProjectId(projectRoot)` — G5
 
 ```
-Input:  "D:\\OneDrive\\Code\\ai\\TriLC"
+Input:  "D:\\OneDrive\\Code\\ai\\TriRLC"
 Output: SHA-256(normalized.toLowercase()).hex.slice(0, 12)
 Result: 12-char stable hex digest
 ```
@@ -85,7 +85,7 @@ keyCachePath        → join(cognitionDir, 'key-cache.json')
 ```
 companyWeeklyPlaneDir → resolveWeeklyPlaneRoot():
   1. TRILC_WEEKLY_PLANE_ROOT env (must exist on disk)
-  2. workspace sibling: <TriLC-root>/../TriMetaverse/docs/workflow/operating-records
+  2. workspace sibling: <TriRLC-root>/../TriMetaverse/docs/workflow/operating-records
   3. undefined → legacy project-track behavior, byte-for-byte unchanged
 ```
 

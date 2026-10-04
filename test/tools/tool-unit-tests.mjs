@@ -1,4 +1,4 @@
-// ── TriLC Tool Unit Tests (Task D) ──
+// ── TriRLC Tool Unit Tests (Task D) ──
 // Tests all 5 CC-equivalent tools: Read, Write, Edit, Glob, Grep
 // Uses executeTool from @trimetaverse/agent-core for direct invocation.
 // Test Engineer: 小柯 (2026-07-27)

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// ── TriLC CLI ──
-// Provides start/stop/status/run commands for the TriLC daemon.
+// ── TriRLC CLI ──
+// Provides start/stop/status/run commands for the TriRLC daemon.
 // CTO-008-P P.1: CLI entry point for PC desktop packaging.
 
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -8,7 +8,7 @@ import { resolve, dirname, join } from 'node:path';
 import { mkdirSync, openSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { platform } from 'node:os';
-import type { TriLCDaemonServiceConfig } from './daemon/service.js';
+import type { TriRLCDaemonServiceConfig } from './daemon/service.js';
 // REQ-018: PID management lives in pidfile.ts (shared with the daemon).
 import { findProcessByPort, isProcessAlive, readPid, removePidFile, verifyPortPidConsistency, waitProcessExit } from './pidfile.js';
 import { installTrimcTokenFetch } from './trimc-auth.js';
@@ -27,7 +27,7 @@ const REGRUN_VALUE = 'TriLC';
 
 // ── Help ──
 function printHelp(): void {
-  console.log(`TriLC (Local Controller) — TriMetaverse Desktop Daemon
+  console.log(`TriRLC (Local Controller) — TriMetaverse Desktop Daemon
 
 Usage: trilc <command> [options]
 
@@ -242,7 +242,7 @@ async function cmdStart(port: number, permissionMode?: string, allowRules?: stri
   }
 
   // ①诊断修复（健康窗口）：10s 单次 → 30s 轮询。冷启动需拉 keys +
-  // 13 员工 roster + 14 contracts + TriMC 连接，10s 过窄（22:05/22:12
+  // 13 员工 roster + 14 contracts + TriMMC 连接，10s 过窄（22:05/22:12
   // auto-start 连败实证）。失败输出明确诊断原因 + 日志路径。
   const pidDeadline = Date.now() + 30000;
   let registered = false;
@@ -748,7 +748,7 @@ async function cmdListSessions(port: number): Promise<void> {
 
 // ── Daemon subcommands ──
 
-function resolveDaemonConfig(port: number): TriLCDaemonServiceConfig {
+function resolveDaemonConfig(port: number): TriRLCDaemonServiceConfig {
   const entryScript = resolve(__dirname, 'cli.js');
   return {
     nodeBin: process.execPath,

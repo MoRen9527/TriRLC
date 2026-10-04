@@ -1,4 +1,4 @@
-// ── TriLC Event Queue Types ──
+// ── TriRLC Event Queue Types ──
 // Defines the QueuedEvent model as specified in CTO-008-M §3.2.2.
 
 export interface QueuedEvent {

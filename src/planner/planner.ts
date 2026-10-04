@@ -8,7 +8,7 @@ import {
   type SpawnConfig,
   type SubAgentEvent,
 } from '@tricompany/agent-core';
-import type { TriLCEnv } from '../config/env.js';
+import type { TriRLCEnv } from '../config/env.js';
 
 export interface TaskPlan {
   taskId: string;
@@ -40,7 +40,7 @@ Respond with a JSON object:
 };
 
 export class LocalPlanner {
-  constructor(private readonly env: TriLCEnv) {}
+  constructor(private readonly env: TriRLCEnv) {}
 
   /** Decompose a task using sub-agent. Falls back to simple plan on error. */
   async decomposeTask(

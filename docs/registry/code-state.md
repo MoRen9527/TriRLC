@@ -1,8 +1,8 @@
-# TriLC Code State
+# TriRLC Code State
 
 ## Repository Map
 
-- `src/server/`：HTTP API server（TriMC 兼容）— **CTO-008-M 新增**。`app.ts` 提供 ConnectionManager（3 次失败降级/2 次成功恢复状态机）+ 增强心跳（POST `/internal/v1/heartbeat`）+ 恢复回放（degraded→connected 自动触发 `_performReplay()`）+ `/healthz` `/internal/v1/agent` 端点。
+- `src/server/`：HTTP API server（TriMMC 兼容）— **CTO-008-M 新增**。`app.ts` 提供 ConnectionManager（3 次失败降级/2 次成功恢复状态机）+ 增强心跳（POST `/internal/v1/heartbeat`）+ 恢复回放（degraded→connected 自动触发 `_performReplay()`）+ `/healthz` `/internal/v1/agent` 端点。
 - `src/event-queue/`：**NEW CTO-008-M M.1/M.3**。离网事件队列：`store.ts`（SQLite WAL 持久化，prepared statements, batch transactions）、`queue.ts`（`createEventQueue` 工厂：enqueue / getPendingForReplay / applyReplayResponse / expireOldEvents / getQueueSize）、`types.ts`（QueuedEvent / ReplayRequest / ReplayResponse 类型契约）。11 unit tests + 6 integration tests PASS。
 - `src/localbus/`：**NEW CTO-008-M M.3**。`bus.ts` 提供 typed EventEmitter singleton（`localBus`）+ `publish()` helper。Phase 1 内存总线 → Phase 2 UDS/Named Pipe。事件类型：task:queued/running/succeeded/failed、node:connected/degraded/local、agent:event。
 - `src/runtime/`：本地 detached runtime
@@ -21,15 +21,15 @@
 - 已有较清晰的本地域控制器骨架。
 - **2026-07-17 CTO-008-M**：通信协议全线代码落地 + 测试通过（M.1-M.6 完成，M.7 收口中）：
   - M.1: `src/event-queue/` SQLite 事件队列 — 11 tests PASS
-  - M.2: TriMC replay 端点（TriMC app.ts）— 6 集成测试覆盖
+  - M.2: TriMMC replay 端点（TriMMC app.ts）— 6 集成测试覆盖
   - M.3: `src/localbus/` 内存 EventEmitter 总线
-  - M.4: 增强心跳（TriMC + TriLC ConnectionManager）
-  - M.5: 冲突仲裁（TriMC `src/comm/arbitration.ts`）— 11 tests PASS
+  - M.4: 增强心跳（TriMMC + TriRLC ConnectionManager）
+  - M.5: 冲突仲裁（TriMMC `src/comm/arbitration.ts`）— 11 tests PASS
   - M.6: 端到端集成测试（enqueue→replay→arbitrate→apply）— 6 tests PASS
-  - 全量：27 tests / 0 fail（TriLC）；11 tests / 0 fail（TriMC 仲裁模块）
-- 2026-07-16：CTO-008-P 冒烟测试通过 — healthz、代理到 TriMC（失败→fallback→本地 agentLoop）、clean shutdown 均验证 OK
+  - 全量：27 tests / 0 fail（TriRLC）；11 tests / 0 fail（TriMMC 仲裁模块）
+- 2026-07-16：CTO-008-P 冒烟测试通过 — healthz、代理到 TriMMC（失败→fallback→本地 agentLoop）、clean shutdown 均验证 OK
 - **2026-07-22：arch-trilc-daemon 交付（CTO 门禁 APPROVE）** — CLI daemon 注册（`install-service`/`uninstall-service`/`install-regrun`/`uninstall-regrun`，8/8 代码审查验证项通过）+ session-store schema v2 migration（`sync_status`/`last_synced_at`/`cloud_session_id`/`title`，37/37 新增单元测试 PASS）+ 已有回归 28/28 PASS。SyncStatus 默认值统一为 `'local'`。待后续树：arch-trilc-tray（Tray 实现）、arch-trilc-sync（sync-engine+端点）、arch-trilc-msi-e2e（MSI+集成验证）。
-- 依赖 `@trimetaverse/agent-core` (file:../TriMC/packages/agent-core) + `trimodel`
+- 依赖 `@trimetaverse/agent-core` (file:../TriMMC/packages/agent-core) + `trimodel`
 - 2026-05-26 已补齐独立 git 仓、根级 `.gitignore` 与本地 CodeGraph 标配。
 - 尚未建立 registry 级代码健康评分和 git 健康摘要。
 
@@ -53,13 +53,13 @@
 ## Quality Risks
 
 - 本地域控制器与移动端、入口层的边界容易被过度乐观表述。
-- 若不持续区分 `TriLC` 的本地 runtime / planner / tool bus 职责与 PC 端软件层的工作台职责，后续很容易混淆本地执行面和桌面入口面。
+- 若不持续区分 `TriRLC` 的本地 runtime / planner / tool bus 职责与 PC 端软件层的工作台职责，后续很容易混淆本地执行面和桌面入口面。
 - 若不持续更新 planner 和 node lifecycle 的成熟度，后续人格型 agent 会高估执行能力。
 
 ## Known Issues / Follow-ups
 
 - **2026-07-25 工程纪律登记（AgentEvent 消费约束）**：`@trimetaverse/agent-core` 的 `agentLoop` 每轮模型回复会 emit 两类事件——`content_delta`（每个 stream chunk 一次，增量文本）与 `assistant_message`（整轮结束一次性，完整聚合 content + tool_calls）。**二者在 content 维度上语义重叠且互斥**：`assistant_message.content` 即同一轮 `content_delta.delta` 的聚合，下游消费者二选一，禁止同时累加/转发，否则会产生重复文本（如 "ABC"+"ABC"）。`tool_calls` 维度有**两个同源事件**：`assistant_message`（聚合 `tool_calls[]`）与独立的 `tool_call`（单调用事件，携带同 id/name/arguments）。下游必须按 **tool_use id 去重**（先到先处理、后到跳过），禁止双源同时开 tool_use block / 转发 tool_calls delta，否则客户端会看到重复的 `content_block_start`（同 id）或重复的 tool_calls chunk。两个 converter（`anthropic-stream.ts` / `openai-stream.ts`）均已用 `processedToolUseIds: Set<string>` 落地该去重（每轮 `request_start` 清空）。正确兜底范式参考 `src/server/app.ts` `/internal/v1/sessions/{id}/stream` 中的 `if (am.content && !deltaContent)` 写法——仅在未收到任何 delta 时用 `assistant_message.content` 兜底。本次 `/v1/messages`、`/chat/completions` 流式与 JSON 四处消费点违反该约束的 Bug 已在修复中；本条纪律作为防复发基线长期生效。
-- **2026-07-25 review 偏差登记（ink 依赖）**：TriLC 实际依赖 `ink@^5.2.0`（npm 公开包），CTO 历史技术 review 中"自研 Ink vendor 吸收"未落地。当前以 npm 公开包依赖运行，不阻塞本次 AgentEvent 重复文本修复；后续若进入正式宿主切换或供应链收敛阶段，需另行评估是否进入 vendor 吸收或锁定包指纹，作为 follow-up 待办。
+- **2026-07-25 review 偏差登记（ink 依赖）**：TriRLC 实际依赖 `ink@^5.2.0`（npm 公开包），CTO 历史技术 review 中"自研 Ink vendor 吸收"未落地。当前以 npm 公开包依赖运行，不阻塞本次 AgentEvent 重复文本修复；后续若进入正式宿主切换或供应链收敛阶段，需另行评估是否进入 vendor 吸收或锁定包指纹，作为 follow-up 待办。
 
 ## Phase 1 配置平面改造（W30，cpo-trimodel-deployment）
 
@@ -83,7 +83,7 @@
 ### Mirror 模块（`src/mirror/`）
 
 - **★ Phase 1 新增**：`pusher.ts`（推送引擎）+ `types.ts`（类型契约）
-- 用于 TriLC → TriMC 云端会话数据镜像推送
+- 用于 TriRLC → TriMMC 云端会话数据镜像推送
 
 ### Agent Contract Resolver（`src/config/contract-resolver.ts`）
 
@@ -108,7 +108,7 @@
 - 真 tmp→rename 原子写 + 校验读回；`eventSeq` 单调递增；无任何 git 操作（与 init-state.ts REQ-019 隐患区分，不复刻）。
 - 断点续跑：daemon 启动 `load()` 恢复帧；`transitionTo()` 发布 `init:chain-changed`（事件帧 = 状态文件投影，eventSeq 同帧）。
 - I1 真实动作仅 `uninitialized→selfcheck`（启动转移，不自动探测）；其余转移由后续树端点驱动。
-- 护栏延续：`src/company/session-initializer.ts` 与 TriMC 同源文件 diff 零行；`init-state.ts` diff 零行。
+- 护栏延续：`src/company/session-initializer.ts` 与 TriMMC 同源文件 diff 零行；`init-state.ts` diff 零行。
 
 ### 自检（`src/company/init-selfcheck.ts`）
 
@@ -207,7 +207,7 @@
 
 ### bundle 契约（`src/company/sync-bundle.ts`，纯函数可单测）
 
-- **I4 新增（init-collab-i4-five-dim-sync）**：五维 bundle schema 契约（TriMC 接收侧 `src/config-sync/types.ts` 独立实现同一契约，跨仓共享包升级挂后续）。
+- **I4 新增（init-collab-i4-five-dim-sync）**：五维 bundle schema 契约（TriMMC 接收侧 `src/config-sync/types.ts` 独立实现同一契约，跨仓共享包升级挂后续）。
 - 密钥纪律（SEC-20260813-001）：递归拒绝 `api_key`/`apiKey`/`secret`/`token` 字段（任意深度、非空字符串值）；keys 维白名单 `provider`/`ready`/`fingerprint`/`baseUrl`（额外字段拒绝）；指纹 = SHA-256(材料).slice(0,8)（内存内计算即刻丢弃）；contentHash = 五维语义哈希（不含 bundleId/generatedAt/generatedBy 元字段——元字段每次生成必然不同，纳入会使幂等重跑判定恒失效）；generatedAt 单调 = max(now, 现存 + 1ms)。
 - 测试门禁：构造含 `api_key: "sk-..."` 载荷 → 校验抛错；`assertNoSecretMaterial` 序列化全文断言（无 sk- 明文、无密钥字段名）。
 - Phase D 契约冻结：L1-L4 确认卡类型（ConfirmCheckPayload/ConfirmResult，§六）——实现待 I3 收官解锁信号。
@@ -219,7 +219,7 @@
 - 幂等：本地文件已存在且五维语义 hash 未变 → 不重新生成、不换 bundleId（重跑 = 纯重推，`diff --cached --quiet` 无变更跳过 commit）。
 - 写 + commit + push：原子写（tmp→rename）→ `git add docs/registry/init-sync/sync-config.json` → 固定身份 commit（`-c user.name="TriLC Init Sync" -c user.email="trilc@tri.company"`，D2）→ 双远端 push origin/sg-server dev；任一 push 失败 = 失败分类 + `phaseDetail.sync.status='failed'` 挂起（链态留 sync，重跑即重推）。
 - 成功路径：`updateSync({status:'pushed',bundleId})` 快照 → `transitionTo('confirm')`（D1：转移门槛 = pushed）→ 事件族 `init:sync-started/progress（逐维三态）/finished/failed` + `init:step-event {phase:'sync',step:'pushed'}`（经既有 /internal/v1/init/events SSE，零新通道）。
-- `GET /internal/v1/init/sync/status`：chainState + phaseDetail.sync + 本地 bundle 摘要 + remote（拉取 TriMC config/sync/status，超时 3s 降级 null）。
+- `GET /internal/v1/init/sync/status`：chainState + phaseDetail.sync + 本地 bundle 摘要 + remote（拉取 TriMMC config/sync/status，超时 3s 降级 null）。
 - daemon 重启 re-sync 检查（§6.6 尾部）：链态 sync/confirm → 读本地 bundle + 调一次 sync/status（远程不可达静默）；只读 no-op，不自动 push/生成。
 - init-chain.ts 增量：`updateSync`/`updateConfirm` 快照方法（SyncPhase/ConfirmPhase 字段已预留，零 schema 字段新增——门禁 2 同规）。
 
@@ -237,7 +237,7 @@
 
 ### 返修包 R（i4-4 终审打回，2026-08-14 一批交付）
 
-- **R1 devHead 自引用修复**（OBS-1）：`sync-bundle.ts` computeDimsContentHash 排除 project.devHead（自引用字段——每次成功 run 必 commit bundle 推进 HEAD，纳入使幂等重跑恒失效）；`init-sync.ts` assembleBundle 幂等路径返回 existing 原样 + writeBundleAtomic 跳过（字节不变 → 无 commit → 纯重推）；devHead 保留为 bundle 内诊断事实。TriMC types.ts computeContentHash 同口径（两端一致）。
+- **R1 devHead 自引用修复**（OBS-1）：`sync-bundle.ts` computeDimsContentHash 排除 project.devHead（自引用字段——每次成功 run 必 commit bundle 推进 HEAD，纳入使幂等重跑恒失效）；`init-sync.ts` assembleBundle 幂等路径返回 existing 原样 + writeBundleAtomic 跳过（字节不变 → 无 commit → 纯重推）；devHead 保留为 bundle 内诊断事实。TriMMC types.ts computeContentHash 同口径（两端一致）。
 - **R2 L2 收敛语义**（OBS-6b）：`init-confirm.ts` computeL2 重写为同 dev 线语义（bundleHead 祖先/相等 localHead 且 local/fleet 等值或互为祖先 → 绿；分叉红勿确认；fleetHead 不可解析红+先 pull；降级 = bundleHead 祖先/相等，废止双值比较）；ConfirmCheckL2 增 bundleAncestor additive。
 - **R3 L1 空集一致**（OBS-6a）：worktreePath 三方等值（含空集）判 ok + 确认卡空集提示注记；repoUrl/projectKey 维持非空 + 等值。
 - 单测：+8 L2 矩阵 +2 L1 空集 +1 R1 幂等矩阵（仅 devHead 变化重跑不换 bundleId/不 commit/字节不变）；全量 427/426（1 fail = components.test.ts 既有缺口）。
@@ -246,12 +246,12 @@
 ### L1-L4 协同确认（`src/company/init-confirm.ts`，Phase D）
 
 - **I4 Phase D 新增**：`GET /internal/v1/init/confirm/check`（按需计算，无后台常驻轮询）+ `POST /internal/v1/init/confirm`（服务端重算 check → readyForConfirm 门禁 409 附 check → `updateConfirm` 快照 confirmed + l1/l2/l3 → `transitionTo('ready')` → init:step-event confirmed）。
-- L1 注册同一性：注册点 activeProjectKey/repoUrl/worktrees ↔ bundle.project ↔ TriMC status.project 三面比对；worktree 路径用短指纹呈现（SHA-256.slice(0,8)，sync-bundle.ts `computePathFingerprint`）。
+- L1 注册同一性：注册点 activeProjectKey/repoUrl/worktrees ↔ bundle.project ↔ TriMMC status.project 三面比对；worktree 路径用短指纹呈现（SHA-256.slice(0,8)，sync-bundle.ts `computePathFingerprint`）。
 - L2 版本一致：本地 HEAD == bundle.devHead == fleetHead.commit；降级口径（remote null）→ 双值比较 + degraded: true。
 - L3 写读闭环：applied.bundleId == 本地 bundle 文件 bundleId（sync commit 即探针）。
 - L4 反向闭环：{ status: 'pending', note: '由首个协同工作承载' }（I5 树承载）。
 - readyForConfirm = l1 && l2 && l3 全 ok（§2.8 验收口径：协同开启成功 = 三元素一致 + 一次确认）。
-- TriMC status 端点增 additive `project` 字段（applied project 维内容，L1 服务器侧事实源）。
+- TriMMC status 端点增 additive `project` 字段（applied project 维内容，L1 服务器侧事实源）。
 - 单测 +11：三面一致全绿 / repoUrl 错误仓 / worktree 指纹呈现 + 服务器侧不一致 / fleet 落后 / 降级口径 / 未 applied 未就绪 / 本地 bundle 缺失 / confirm 成功转移 ready + 快照 + 事件 / 409 notReady 附 check / 409 chainState / 防重入并发。全量 409/410（1 fail 同既有缺口）。
 - 两入口渲染：trilc chat CONFIRM 文本流程（L1-L4 呈现 + 红差异 + 诊断入口 + 确认问答）+ TriPilot 确认卡（三元素同显 + HEAD 徽标 + 未就绪提示 + 确认按钮门禁禁用态）；零本地执行。
 

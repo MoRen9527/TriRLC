@@ -1,4 +1,4 @@
-// ── TriLC Edit tool ──
+// ── TriRLC Edit tool ──
 // CC-equivalent string-replacement editor. Supports replace_all and
 // exact-match semantics (old_string must appear verbatim in file).
 

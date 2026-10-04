@@ -1,4 +1,4 @@
-// ── TriLC Session Reaper Tests ──
+// ── TriRLC Session Reaper Tests ──
 // Covers: completed 30d / interrupted 7d / expired immediate / active skip /
 // transaction rollback on error.
 
@@ -10,7 +10,7 @@ import path from "node:path";
 import os from "node:os";
 import { createSessionReaper } from "../src/cron/session-reaper.js";
 
-describe("TriLCSessionReaper", () => {
+describe("TriRLCSessionReaper", () => {
   let dbPath: string;
   let db: DatabaseSync;
 

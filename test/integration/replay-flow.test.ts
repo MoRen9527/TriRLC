@@ -5,7 +5,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import * as assert from 'node:assert';
 import { createEventQueue } from '../../src/event-queue/queue.js';
-import { arbitrate, resetArbitrationState, trackTaskAssignment, trackToolExecution } from '../../../TriMC/src/comm/arbitration.js';
+import { arbitrate, resetArbitrationState, trackTaskAssignment, trackToolExecution } from '../../../TriMMC/src/comm/arbitration.js';
 import { unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -37,7 +37,7 @@ describe('Replay integration (M.1 + M.2 + M.5)', () => {
       assert.equal(e2.sequenceNumber, 2);
       assert.equal(e3.sequenceNumber, 3);
 
-      // ── Phase 2: Track server-side state on TriMC ──
+      // ── Phase 2: Track server-side state on TriMMC ──
       trackTaskAssignment('task-1', nodeId);
       trackToolExecution('ik-alpha');
 
@@ -45,7 +45,7 @@ describe('Replay integration (M.1 + M.2 + M.5)', () => {
       const pending = queue.getPendingForReplay('conn-alpha', 100);
       assert.equal(pending.length, 3);
 
-      // ── Phase 4: Arbitrate (simulating TriMC replay endpoint) ──
+      // ── Phase 4: Arbitrate (simulating TriMMC replay endpoint) ──
       const result = arbitrate(nodeId, pending);
 
       // task_assign(task-1): accepted (assigned to same node)

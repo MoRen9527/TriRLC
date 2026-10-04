@@ -1,4 +1,4 @@
-// ── TriLC Heartbeat Wake ──
+// ── TriRLC Heartbeat Wake ──
 // Independent wake coalescing / scheduling module.
 // Extracted from ConnectionManager (CTO-008-M); absorbed from openclaw heartbeat-wake pattern.
 //
@@ -21,7 +21,7 @@ export type HeartbeatWakeHandler = (opts: {
   sessionKey?: string;
 }) => Promise<HeartbeatRunResult>;
 
-export interface TriLCHeartbeatWake {
+export interface TriRLCHeartbeatWake {
   /**
    * Register (or clear) the wake handler.
    * Returns a disposer function that clears this specific registration.
@@ -68,7 +68,7 @@ function resolvePriority(reason?: string): number {
 
 // ── Factory ──
 
-export function createHeartbeatWake(): TriLCHeartbeatWake {
+export function createHeartbeatWake(): TriRLCHeartbeatWake {
   // ── Module-scoped state (per instance) ──
   let enabled = true;
   let handler: HeartbeatWakeHandler | null = null;

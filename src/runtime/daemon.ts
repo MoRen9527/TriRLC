@@ -4,7 +4,7 @@
 // 2. Watches for incoming tasks and orchestrates planner → agentLoop execution
 // 3. Tracks task state transitions via TaskRuntime
 
-import type { TriLCEnv } from '../config/env.js';
+import type { TriRLCEnv } from '../config/env.js';
 import { LocalNode } from '../local-node/node.js';
 import { LocalPlanner, type TaskPlan } from '../planner/planner.js';
 import { TaskRuntime } from '../task-runtime/runtime.js';
@@ -21,7 +21,7 @@ export class LocalRuntimeDaemon {
   private running = false;
   private tasks = new Map<string, TaskRuntime>();
 
-  constructor(private readonly env: TriLCEnv) {
+  constructor(private readonly env: TriRLCEnv) {
     this.node = new LocalNode(env);
     this.planner = new LocalPlanner(env);
   }

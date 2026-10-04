@@ -7,7 +7,7 @@
 // body.command/args/env 直传 connectServer 启动子进程。通道(b) bypassPermissions 任务流
 // 缺省收紧明确不入本树范围（计划两步走，见树 reports/verify.md §3③）。
 //
-// 修复语义与文案契约钉死（src/server/app.ts，行号为 TriLC HEAD=26720dd 工作树 Read 实证）：
+// 修复语义与文案契约钉死（src/server/app.ts，行号为 TriRLC HEAD=26720dd 工作树 Read 实证）：
 //   cron POST 创建拦截      ：3557-3573（JSON 解析后、addJob 前）→ 403 {"ok":false,"error":"command_not_allowed"}
 //   cron PATCH 更新拦截     :3604-3628（id 正则与 JSON 解析后、updateJob 前）→ 同上形状
 //   缺省口径                TRILC_CRON_COMMAND_ALLOWLIST 未配置/空串 ⇒ 空集 ⇒ 一切携带
@@ -18,7 +18,7 @@
 //                           {"error":"mcp_runtime_add_disabled"}（注意：错误体无 ok 字段，
 //                           与 cron 族错误体形状刻意不同）；请求期读 env。
 //
-// 分层：cronCommandHttpAllowed 单元直测 + createTriLCApp 真起服端到端（起服配方对齐
+// 分层：cronCommandHttpAllowed 单元直测 + createTriRLCApp 真起服端到端（起服配方对齐
 // test/server/tasks-submit-weekly-hint.test.ts 先例；恒附正确 x-internal-token 以隔离
 // 通道一/二门，只考察本文件的两个入口级闸门）。
 //
@@ -32,7 +32,7 @@ import { request as httpRequest } from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createTriLCApp, cronCommandHttpAllowed } from '../../src/server/app.js';
+import { createTriRLCApp, cronCommandHttpAllowed } from '../../src/server/app.js';
 
 /** 用后还原 env 的最小封装。 */
 function withEnv(key: string, value: string | undefined): () => void {
@@ -144,8 +144,8 @@ describe('P0 通道三单元层：cronCommandHttpAllowed（app.ts:216-228）', (
 
 const TEST_INTERNAL_TOKEN = 'pd-t-cron-guard-fixed-token';
 
-describe('P0 通道三端到端：createTriLCApp 真实 HTTP 双入口拦截与 MCP 开关', () => {
-  let app: ReturnType<typeof createTriLCApp>;
+describe('P0 通道三端到端：createTriRLCApp 真实 HTTP 双入口拦截与 MCP 开关', () => {
+  let app: ReturnType<typeof createTriRLCApp>;
   let appPort: number;
   let tmpDataDir: string;
 
@@ -208,7 +208,7 @@ describe('P0 通道三端到端：createTriLCApp 真实 HTTP 双入口拦截与 
     env.port = 0;
     env.trimodelApiUrl = 'http://127.0.0.1:1'; // 死端口快速降级，零外呼
 
-    app = createTriLCApp(env);
+    app = createTriRLCApp(env);
     await app.start();
     appPort = env.port;
     if (!appPort) throw new Error('app did not bind a port');

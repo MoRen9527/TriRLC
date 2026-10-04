@@ -1,9 +1,9 @@
-// ── Compact Service (CC compact.ts adapted for TriLC) ──
+// ── Compact Service (CC compact.ts adapted for TriRLC) ──
 // Core conversation compaction using Anthropic API.
 // A-level core copy: prompt generation + API call + summary formatting.
-// Shim dependencies: removed PTL retry, skill reinjection, hooks (TriLC lacks these).
+// Shim dependencies: removed PTL retry, skill reinjection, hooks (TriRLC lacks these).
 
-import type { TriLCMessage } from './grouping.js';
+import type { TriRLCMessage } from './grouping.js';
 import { getCompactPrompt, formatCompactSummary, getCompactUserSummaryMessage } from './prompt.js';
 import { estimateMessageTokens } from './grouping.js';
 
@@ -23,10 +23,10 @@ const ERROR_MESSAGE_INCOMPLETE_RESPONSE = 'Compaction incomplete — network iss
 
 /**
  * Core compact function: sends conversation to Anthropic API for summarization.
- * Adapted from CC compactConversation() with TriLC message structure.
+ * Adapted from CC compactConversation() with TriRLC message structure.
  */
 export async function compactConversation(
-  messages: TriLCMessage[],
+  messages: TriRLCMessage[],
   customInstructions?: string,
 ): Promise<CompactResult> {
   if (messages.length < 3) {
@@ -109,7 +109,7 @@ export async function compactConversation(
  * This is the version used by the auto-trigger wrapping layer in app.ts.
  */
 export async function compactViaModelClient(
-  messages: TriLCMessage[],
+  messages: TriRLCMessage[],
   apiKey?: string,
   baseUrl?: string,
   customInstructions?: string,
@@ -151,12 +151,12 @@ export async function compactViaModelClient(
 }
 
 /**
- * Prepare compacted message list for TriLC.
+ * Prepare compacted message list for TriRLC.
  * Returns a new message list with the summary as a system message.
  */
 export function createCompactedMessages(
   summaryMessage: string,
-): TriLCMessage[] {
+): TriRLCMessage[] {
   return [
     { role: 'assistant', content: summaryMessage },
   ];

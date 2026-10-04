@@ -585,7 +585,7 @@ const INIT_MODE_STAGE_HINTS: Partial<Record<ChainState, string>> = {
   selfcheck: '自检阶段：查看/等待自检结果（chain/status 的 phaseDetail.selfcheck）；自检由 daemon 端点触发，通过后进入公司开张。',
   onboarding: '公司开张阶段：引导 CEO 在 TriPilot 面板阶段卡或 trilc chat 初始化流程中选择员工岗位并起名；装配由 daemon 端点 POST /internal/v1/init/assemble 执行。',
   'project-link': '项目面初始化阶段：引导 CEO 完成项目源选择（本地仓 / GitHub 链接）与 worktree 建立。',
-  sync: '五维同步阶段：等待/推进与 TriMC 的公司、模型、key、员工、项目同步。',
+  sync: '五维同步阶段：等待/推进与 TriMMC 的公司、模型、key、员工、项目同步。',
   confirm: '协同确认阶段：三方比对确认后进入可协同态。',
 };
 

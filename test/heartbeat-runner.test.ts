@@ -1,4 +1,4 @@
-// ── TriLC Heartbeat Runner Tests ──
+// ── TriRLC Heartbeat Runner Tests ──
 // Covers: start/stop idempotency, interval-triggered execution,
 // updateAgents hot-reload, requests-in-flight skip.
 
@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it, mock } from "node:test";
 import {
   createHeartbeatRunner,
-  type TriLCHeartbeatRunner,
+  type TriRLCHeartbeatRunner,
   type HeartbeatAgentConfig,
 } from "../src/heartbeat/heartbeat-runner.js";
 import type { SessionRecord } from "../src/session-store/types.js";
@@ -63,8 +63,8 @@ function createMockSessionStore() {
 // heartbeat-runner's dependency instead.
 // For these tests we validate the runner's scheduling logic, not agent execution.
 
-describe("TriLCHeartbeatRunner", () => {
-  let runner: TriLCHeartbeatRunner;
+describe("TriRLCHeartbeatRunner", () => {
+  let runner: TriRLCHeartbeatRunner;
   let store: ReturnType<typeof createMockSessionStore>;
 
   beforeEach(() => {

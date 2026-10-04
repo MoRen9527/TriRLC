@@ -1,4 +1,4 @@
-// ── TriLC Phase C3 Smoke Tests ──
+// ── TriRLC Phase C3 Smoke Tests ──
 // Uses Node.js built-in test runner (node --test).
 // Run: npx tsx --test test/smoke.test.ts
 

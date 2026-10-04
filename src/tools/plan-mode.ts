@@ -14,7 +14,7 @@
 //
 // C8: DUAL PROTECTION with `plan` permission mode
 // ─────────────────────────────────────────────
-// TriLC now has TWO plan-mode enforcement layers:
+// TriRLC now has TWO plan-mode enforcement layers:
 //   1. `plan` permission mode (agent-core decision pipeline Step 7):
 //      Blocks all write/mutate tools at the permission engine level.
 //      Deterministic, non-interactive, applies to the entire session.

@@ -6,7 +6,7 @@
 
 // ── Configuration ──
 
-export interface TriLCDaemonServiceConfig {
+export interface TriRLCDaemonServiceConfig {
   /** Service label / task name. Default: "TriLC Daemon". */
   label?: string;
   /** Path to node binary (typically process.execPath). */
@@ -19,7 +19,7 @@ export interface TriLCDaemonServiceConfig {
   cwd: string;
   /** Environment variables to pass to the daemon process. */
   env?: Record<string, string>;
-  /** TriLC data directory for PID/session/event persistence. */
+  /** TriRLC data directory for PID/session/event persistence. */
   dataDir: string;
   /** Port the daemon listens on. */
   port: number;
@@ -57,21 +57,21 @@ export interface DaemonServiceStartResult {
 
 // ── Service Interface ──
 
-export interface TriLCDaemonService {
+export interface TriRLCDaemonService {
   /** Stage: write the service definition file without registering with the OS. */
-  stage(config: TriLCDaemonServiceConfig): Promise<string>;
+  stage(config: TriRLCDaemonServiceConfig): Promise<string>;
   /** Install: stage + register with the OS. */
-  install(config: TriLCDaemonServiceConfig): Promise<void>;
+  install(config: TriRLCDaemonServiceConfig): Promise<void>;
   /** Uninstall: remove OS registration + staged files. */
-  uninstall(config: TriLCDaemonServiceConfig): Promise<void>;
+  uninstall(config: TriRLCDaemonServiceConfig): Promise<void>;
   /** Stop the running daemon service. */
-  stop(config: TriLCDaemonServiceConfig): Promise<void>;
+  stop(config: TriRLCDaemonServiceConfig): Promise<void>;
   /** Restart: stop + start. Returns the outcome. */
-  restart(config: TriLCDaemonServiceConfig): Promise<DaemonServiceStartResult>;
+  restart(config: TriRLCDaemonServiceConfig): Promise<DaemonServiceStartResult>;
   /** Query the current OS-level state. */
-  status(config: TriLCDaemonServiceConfig): Promise<DaemonServiceState>;
+  status(config: TriRLCDaemonServiceConfig): Promise<DaemonServiceState>;
   /** Whether the service is registered / loaded. */
-  isLoaded(config: TriLCDaemonServiceConfig): Promise<boolean>;
+  isLoaded(config: TriRLCDaemonServiceConfig): Promise<boolean>;
 }
 
 // ── Platform Resolution ──
@@ -85,10 +85,10 @@ function isSupportedPlatform(p: NodeJS.Platform): p is SupportedPlatform {
 /**
  * Resolve the platform-appropriate daemon service implementation.
  */
-export async function resolveDaemonService(): Promise<TriLCDaemonService> {
+export async function resolveDaemonService(): Promise<TriRLCDaemonService> {
   if (!isSupportedPlatform(process.platform)) {
     throw new Error(
-      `TriLC daemon service is not supported on ${process.platform}`,
+      `TriRLC daemon service is not supported on ${process.platform}`,
     );
   }
 

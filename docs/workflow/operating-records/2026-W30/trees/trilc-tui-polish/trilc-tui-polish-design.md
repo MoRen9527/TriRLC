@@ -1,10 +1,10 @@
-# TriLC CLI TUI T2 — 体验打磨技术设计
+# TriRLC CLI TUI T2 — 体验打磨技术设计
 
 版本：V0.1
 日期：2026-07-24
 状态：初版 · CTO 技术线产出
 作者：CTO 小狄
-关联：TriLC T1 MVP（5 组件 + SSE + tsc 零错误，已完成）
+关联：TriRLC T1 MVP（5 组件 + SSE + tsc 零错误，已完成）
 
 ---
 
@@ -12,22 +12,22 @@
 
 ### 0.1 工作路径核查
 
-- **PASS** — 目标写入路径 `TriLC/docs/workflow/operating-records/2026-W30/trees/trilc-tui-polish/` 位于正确模块 `TriLC/` 内，无路径污染。
+- **PASS** — 目标写入路径 `TriRLC/docs/workflow/operating-records/2026-W30/trees/trilc-tui-polish/` 位于正确模块 `TriRLC/` 内，无路径污染。
 
 ### 0.2 技术真源核查
 
 | 检查项 | 路径 | 结论 |
 |--------|------|------|
-| 中央 BusinessStrategy | TriCompany 内 | 本设计为 TriLC 模块内 TUI 体验层变更，不触及模块边界或交付优先级仲裁，无需升级 |
-| Code Registry | TriCompany/docs/registry/code-state.md | TriLC 当前未列入 code-state.md 显式条目，作为本地域执行节点模块，当前设计增量不改变模块面边界 |
-| 模块级 Code Registry | TriLC/docs/registry/ | 尚未创建。T1 MVP 属于快速验证阶段，T2 完成后应补齐模块级 code-state.md |
-| 工程真源 | TriCompany/docs/engineering/DESIGN.md | 不冲突。TriLC 作为 OpenTride 本地节点实现，符合当前阶段架构定位 |
+| 中央 BusinessStrategy | TriCompany 内 | 本设计为 TriRLC 模块内 TUI 体验层变更，不触及模块边界或交付优先级仲裁，无需升级 |
+| Code Registry | TriCompany/docs/registry/code-state.md | TriRLC 当前未列入 code-state.md 显式条目，作为本地域执行节点模块，当前设计增量不改变模块面边界 |
+| 模块级 Code Registry | TriRLC/docs/registry/ | 尚未创建。T1 MVP 属于快速验证阶段，T2 完成后应补齐模块级 code-state.md |
+| 工程真源 | TriCompany/docs/engineering/DESIGN.md | 不冲突。TriRLC 作为 OpenTride 本地节点实现，符合当前阶段架构定位 |
 
 ### 0.3 Daemon SSE tool_calls 现状
 
 **结论：daemon 已发送 `tool_calls`，不需要补 daemon 侧。**
 
-核查路径：`TriLC/src/server/openai-stream.ts`
+核查路径：`TriRLC/src/server/openai-stream.ts`
 
 `agentEventsToOpenAISSE()` 在以下事件中发出 `tool_calls` delta：
 
@@ -501,9 +501,9 @@ Phase 2a (① thinking 动画) → Phase 2b (② 工具调用展示) → Phase 2
 - [ ] 三项功能全部实现并通过各自门禁
 - [ ] `tsc --noEmit` 零错误
 - [ ] 在 PowerShell 下完成手动冒烟：发送消息 → 看到 thinking → 首 token → 流式文本 → 工具调用 → Ctrl+C 取消
-- [ ] T2 代码合入 `TriLC/src/tui/` 主分支
-- [ ] 更新 `TriLC/src/tui/tech-design.md` 追加 T2 变更摘要
-- [ ] 创建模块级 `TriLC/docs/registry/code-state.md`（T1+T2 基线）
+- [ ] T2 代码合入 `TriRLC/src/tui/` 主分支
+- [ ] 更新 `TriRLC/src/tui/tech-design.md` 追加 T2 变更摘要
+- [ ] 创建模块级 `TriRLC/docs/registry/code-state.md`（T1+T2 基线）
 
 ### 5.2 不在此范围
 
@@ -527,13 +527,13 @@ Phase 2a (① thinking 动画) → Phase 2b (② 工具调用展示) → Phase 2
 
 | 依据 | 路径 |
 |------|------|
-| Daemon SSE 格式 | `TriLC/src/server/openai-stream.ts` |
-| T1 基线 useSSE | `TriLC/src/tui/hooks/useSSE.ts` |
-| T1 基线 useChat | `TriLC/src/tui/hooks/useChat.ts` |
-| T1 基线组件 | `TriLC/src/tui/components/*.tsx` |
-| T1 基线 App | `TriLC/src/tui/app.tsx` |
-| Ink render 入口 | `TriLC/src/tui/render.tsx` |
-| T1 技术设计 | `TriLC/src/tui/tech-design.md` |
+| Daemon SSE 格式 | `TriRLC/src/server/openai-stream.ts` |
+| T1 基线 useSSE | `TriRLC/src/tui/hooks/useSSE.ts` |
+| T1 基线 useChat | `TriRLC/src/tui/hooks/useChat.ts` |
+| T1 基线组件 | `TriRLC/src/tui/components/*.tsx` |
+| T1 基线 App | `TriRLC/src/tui/app.tsx` |
+| Ink render 入口 | `TriRLC/src/tui/render.tsx` |
+| T1 技术设计 | `TriRLC/src/tui/tech-design.md` |
 | 公司 Code Registry | `TriCompany/docs/registry/code-state.md` |
 | 公司工程真源 | `TriCompany/docs/engineering/DESIGN.md` |
 

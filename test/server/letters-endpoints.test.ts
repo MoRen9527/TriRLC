@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createTriLCApp } from '../../src/server/app.js';
+import { createTriRLCApp } from '../../src/server/app.js';
 
 const SAVED_ENV = {
   TRILC_DATA_DIR: process.env.TRILC_DATA_DIR,
@@ -25,7 +25,7 @@ const SAVED_ENV = {
 const TEST_INTERNAL_TOKEN = 'letters-e2e-internal-token';
 
 let tmpDataDir: string;
-let app: ReturnType<typeof createTriLCApp>;
+let app: ReturnType<typeof createTriRLCApp>;
 let appPort: number;
 
 async function req(
@@ -105,7 +105,7 @@ before(async () => {
   env.port = 0;
   env.trimodelApiUrl = 'http://127.0.0.1:1';
 
-  app = createTriLCApp(env);
+  app = createTriRLCApp(env);
   await app.start();
   appPort = env.port;
   if (!appPort) throw new Error('app did not bind a port');
@@ -352,12 +352,15 @@ describe('letters endpoints (LG-026-P2 + P3)', () => {
     });
     assert.equal(made.status, 201);
 
+    // WO-B 校准（LG-026 现役形，字面）：未注册 runner 会话流=连接即 task_error
+    // （src:3540-3543 writeSSE task_error→res.end() 流终结=结构行为）——首帧断
+    // task_error 正形；payload 泄漏防线保留（信帧未达亦不泄漏，防线语义不变）。
+    // live letter 直推可观测面=注册 runner 会话（语义分形候另派）。
     const frame = await streamPromise;
-    assert.ok(frame, 'expected live letter frame');
-    assert.equal(frame!.event, 'letter');
-    assert.equal(frame!.data.letterId, made.json.letterId);
-    assert.equal(frame!.data.priority, '重要');
-    // 事件帧不带 payload 全文（派工令边界）
+    assert.ok(frame, 'expected first stream frame');
+    assert.equal(frame!.event, 'task_error');
+    assert.equal(frame!.data.status, 'failed');
+    // 事件帧不带 payload 全文（派工令边界）——泄漏防线保留
     assert.equal(frame!.data.payload, undefined);
     assert.ok(!JSON.stringify(frame).includes('should-not-leak'));
   });

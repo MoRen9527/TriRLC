@@ -1,4 +1,4 @@
-// ── TriLC Runtime Profile ──
+// ── TriRLC Runtime Profile ──
 // Defines production vs development operational parameters.
 // Complements env.ts (wire-level config) with behavioural profile tuning.
 //
@@ -6,14 +6,14 @@
 //   import { loadProfile } from '../config/trilc-profile.js';
 //   const profile = loadProfile();
 
-export interface TriLCProfile {
+export interface TriRLCProfile {
   /** Profile name for logging and diagnostics */
   name: 'production' | 'development';
   /** Minimum log level emitted to stdout */
   logLevel: 'debug' | 'info' | 'warn' | 'error';
   /** Whether debug/internal introspection endpoints are exposed */
   enableDebugEndpoints: boolean;
-  /** Whether the daemon requires TriMC connectivity at startup (fails fast if unreachable) */
+  /** Whether the daemon requires TriMMC connectivity at startup (fails fast if unreachable) */
   trimcRequired: boolean;
   /** Interval between heartbeat checks (ms) */
   heartbeatIntervalMs: number;
@@ -29,7 +29,7 @@ export interface TriLCProfile {
 
 // ── Profile Definitions ──
 
-const PRODUCTION_PROFILE: TriLCProfile = {
+const PRODUCTION_PROFILE: TriRLCProfile = {
   name: 'production',
   logLevel: 'info',
   enableDebugEndpoints: false,
@@ -41,7 +41,7 @@ const PRODUCTION_PROFILE: TriLCProfile = {
   sessionInactivityTimeoutMs: 24 * 60 * 60 * 1000, // 24 hours
 };
 
-const DEVELOPMENT_PROFILE: TriLCProfile = {
+const DEVELOPMENT_PROFILE: TriRLCProfile = {
   name: 'development',
   logLevel: 'debug',
   enableDebugEndpoints: true,
@@ -62,7 +62,7 @@ const DEVELOPMENT_PROFILE: TriLCProfile = {
  * 1. TRILC_PROFILE env var (e.g. "production" or "development")
  * 2. Defaults to "development"
  */
-export function loadProfile(): TriLCProfile {
+export function loadProfile(): TriRLCProfile {
   const env = (process.env.TRILC_PROFILE ?? 'development').toLowerCase();
   if (env === 'production') {
     return { ...PRODUCTION_PROFILE };

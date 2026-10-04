@@ -1,7 +1,7 @@
-// ── TriLC shell_exec tool ──
+// ── TriRLC shell_exec tool ──
 // Backed by agent-core ProcessSupervisor for lifecycle management
 // (timeout enforcement, cancellation, run registry).
-// Security policy mirrors TriMC: allowlist/denylist with env-var overrides.
+// Security policy mirrors TriMMC: allowlist/denylist with env-var overrides.
 
 import { platform } from 'node:os';
 import {

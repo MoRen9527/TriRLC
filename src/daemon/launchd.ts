@@ -14,8 +14,8 @@ import path from "node:path";
 import os from "node:os";
 import { TRILC_LAUNCHD_LABEL } from "./constants.js";
 import type {
-  TriLCDaemonService,
-  TriLCDaemonServiceConfig,
+  TriRLCDaemonService,
+  TriRLCDaemonServiceConfig,
   DaemonServiceState,
   DaemonServiceStartResult,
 } from "./service.js";
@@ -32,7 +32,7 @@ function resolvePlistPath(): string {
   return path.join(resolvePlistDir(), TRILC_LAUNCHD_LABEL + ".plist");
 }
 
-function resolveLogDir(config: TriLCDaemonServiceConfig): string {
+function resolveLogDir(config: TriRLCDaemonServiceConfig): string {
   return path.join(config.dataDir, "daemon");
 }
 
@@ -46,7 +46,7 @@ function getCurrentUserUid(): number {
 
 // ── plist generation ──
 
-function buildPlist(config: TriLCDaemonServiceConfig): string {
+function buildPlist(config: TriRLCDaemonServiceConfig): string {
   const programArgs = [config.nodeBin, config.entryScript, ...config.programArgs];
   const envVars: Record<string, string> = config.env ?? {};
 
@@ -128,7 +128,7 @@ async function isPlistFilePresent(): Promise<boolean> {
 
 // ── Service Operations ──
 
-async function stageService(config: TriLCDaemonServiceConfig): Promise<string> {
+async function stageService(config: TriRLCDaemonServiceConfig): Promise<string> {
   var plistDir = resolvePlistDir();
   await fs.mkdir(plistDir, { recursive: true });
 
@@ -142,7 +142,7 @@ async function stageService(config: TriLCDaemonServiceConfig): Promise<string> {
   return plistPath;
 }
 
-async function installService(config: TriLCDaemonServiceConfig): Promise<void> {
+async function installService(config: TriRLCDaemonServiceConfig): Promise<void> {
   var plistPath = await stageService(config);
   var uid = getCurrentUserUid();
 
@@ -170,7 +170,7 @@ async function installService(config: TriLCDaemonServiceConfig): Promise<void> {
   console.log(LOG_PREFIX + " installed launchd service: " + TRILC_LAUNCHD_LABEL);
 }
 
-async function uninstallService(config: TriLCDaemonServiceConfig): Promise<void> {
+async function uninstallService(config: TriRLCDaemonServiceConfig): Promise<void> {
   var plistPath = resolvePlistPath();
   var plistExists = await isPlistFilePresent();
 
@@ -195,7 +195,7 @@ async function uninstallService(config: TriLCDaemonServiceConfig): Promise<void>
   console.log(LOG_PREFIX + " uninstalled launchd service: " + TRILC_LAUNCHD_LABEL);
 }
 
-async function stopService(config: TriLCDaemonServiceConfig): Promise<void> {
+async function stopService(config: TriRLCDaemonServiceConfig): Promise<void> {
   var plistPath = resolvePlistPath();
   var plistExists = await isPlistFilePresent();
 
@@ -215,7 +215,7 @@ async function stopService(config: TriLCDaemonServiceConfig): Promise<void> {
   console.log(LOG_PREFIX + " stopped launchd service: " + TRILC_LAUNCHD_LABEL);
 }
 
-async function restartService(config: TriLCDaemonServiceConfig): Promise<DaemonServiceStartResult> {
+async function restartService(config: TriRLCDaemonServiceConfig): Promise<DaemonServiceStartResult> {
   var plistExists = await isPlistFilePresent();
   if (!plistExists) {
     var state = await readServiceState(config);
@@ -251,7 +251,7 @@ async function restartService(config: TriLCDaemonServiceConfig): Promise<DaemonS
   return { outcome: "started", state: stateAfter };
 }
 
-async function readServiceState(config: TriLCDaemonServiceConfig): Promise<DaemonServiceState> {
+async function readServiceState(config: TriRLCDaemonServiceConfig): Promise<DaemonServiceState> {
   var plistExists = await isPlistFilePresent();
   var listRes = await execLaunchctl(["list", TRILC_LAUNCHD_LABEL]);
 
@@ -294,14 +294,14 @@ async function readServiceState(config: TriLCDaemonServiceConfig): Promise<Daemo
   };
 }
 
-async function isServiceLoaded(_config: TriLCDaemonServiceConfig): Promise<boolean> {
+async function isServiceLoaded(_config: TriRLCDaemonServiceConfig): Promise<boolean> {
   var listRes = await execLaunchctl(["list", TRILC_LAUNCHD_LABEL]);
   return listRes.code === 0 && listRes.stdout.length > 0;
 }
 
 // ── Factory ──
 
-export function createLaunchdService(): TriLCDaemonService {
+export function createLaunchdService(): TriRLCDaemonService {
   return {
     stage: stageService,
     install: installService,

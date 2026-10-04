@@ -1,8 +1,8 @@
-# TriLC Agent Rules
+# TriRLC Agent Rules
 
 ## Module Role
 
-- TriLC 是本地域控制器。
+- TriRLC 是本地域控制器。
 - 它负责 detached local runtime、本地节点升级、planner、tool bus 和本地执行生命周期。
 - 当商业模式涉及本地域执行、节点升级或本地工具能力时，必须考虑本模块。
 
@@ -17,11 +17,11 @@
 
 ## Current Registries
 
-- `TriLCBusinessStrategyRegistry`
-- `TriLCProductRegistry`
-- `TriLCCodeRegistry`
+- `TriRLCBusinessStrategyRegistry`
+- `TriRLCProductRegistry`
+- `TriRLCCodeRegistry`
 
-当前 registry agent canonical discovery 位于 `TriLC/.github/agents/`。同名中央 discovery 文件不应在 `TriMetaverse/.github/agents/` 并行保留；中央只通过 manifest 和 registry closeout 工作流路由本模块 registry。
+当前 registry agent canonical discovery 位于 `TriRLC/.github/agents/`。同名中央 discovery 文件不应在 `TriMetaverse/.github/agents/` 并行保留；中央只通过 manifest 和 registry closeout 工作流路由本模块 registry。
 
 ## Update Discipline
 

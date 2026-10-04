@@ -1,7 +1,7 @@
 // ── Agent Contract Resolver ──
 // 读取 .contract.yaml（路径索引）→ 加载五件套 → 组装 system prompt
 // 
-// 用途: TriLC 启动时加载所有 agent 定义，运行时根据 agent_id 注入对应身份
+// 用途: TriRLC 启动时加载所有 agent 定义，运行时根据 agent_id 注入对应身份
 
 import { readFileSync, existsSync, watch } from 'fs';
 import { resolve } from 'path';
@@ -36,6 +36,10 @@ export interface AgentContract {
   };
   systemPrompt: string;   // 拼接后的完整 system prompt
   toolControl: Record<string, unknown>;  // frontmatter 解析后的工具配置
+  /** v3 字段族（LG-060 跟新）：tools 含 runtime_equivalent 投影；schema 权威=agent-core 契约面。 */
+  tools: AgentContractV3['tools'];
+  /** v3 运行时基线（对象形现役，spec §2.4；本域透传，消费方按需读取）。 */
+  runtime_baseline?: AgentContractV3['runtime_baseline'];
 }
 
 /** Employee roster entry from TriCompany/docs/registry/employee-roster.json. */
@@ -218,6 +222,9 @@ class AgentContractResolver {
       decisionRights,
       systemPrompt,
       toolControl,
+      // v3 字段族透传（TriMMC src/contracts/resolver.ts:24/53 同构先例）
+      tools: parsed.tools ?? [],
+      runtime_baseline: parsed.runtime_baseline,
     };
   }
 
@@ -266,6 +273,16 @@ class AgentContractResolver {
   /** 获取 agent 的工具控制 */
   getToolControl(agentId: string): Record<string, unknown> | undefined {
     return this.contracts.get(agentId)?.toolControl;
+  }
+
+  /** 获取 agent 的 v3 工具面（含 runtime_equivalent） */
+  getTools(agentId: string): AgentContractV3['tools'] | undefined {
+    return this.contracts.get(agentId)?.tools;
+  }
+
+  /** 获取 agent 的 v3 运行时基线（对象形） */
+  getRuntimeBaseline(agentId: string): AgentContractV3['runtime_baseline'] {
+    return this.contracts.get(agentId)?.runtime_baseline;
   }
 
   /** 列出所有已加载的 agent */

@@ -1,17 +1,17 @@
-// ── TriLC AgentTool (P1 A级复制 - 子代理能力跃升) ──
+// ── TriRLC AgentTool (P1 A级复制 - 子代理能力跃升) ──
 // A级直接复制 from CC: src/tools/AgentTool/AgentTool.tsx
 // 适配说明：
-// - CC 使用复杂的 teammate/bridge 系统 → TriLC 使用 agent-core spawnAgent 进程内递归
-// - CC 支持 worktree/remote isolation → TriLC 简化为基础进程内隔离
-// - CC 有复杂的 agent 加载系统 → TriLC 使用 agent-core built-in agents
+// - CC 使用复杂的 teammate/bridge 系统 → TriRLC 使用 agent-core spawnAgent 进程内递归
+// - CC 支持 worktree/remote isolation → TriRLC 简化为基础进程内隔离
+// - CC 有复杂的 agent 加载系统 → TriRLC 使用 agent-core built-in agents
 
 import { register as registerTool } from '@tricompany/agent-core';
 import { spawnAgent, getBuiltInAgent, listBuiltInAgents } from '@tricompany/agent-core';
 import type { AgentDefinition, SpawnConfig } from '@tricompany/agent-core';
 
 // ── Helper: List agents for /agents command ──
-// Fetches built-in agents from agent-core + company agents from the TriMC
-// company endpoint (装后验收③：chat /agents 需接 company 视图——TriMC
+// Fetches built-in agents from agent-core + company agents from the TriMMC
+// company endpoint (装后验收③：chat /agents 需接 company 视图——TriMMC
 // /internal/v1/agents 返回员工注册表，count 14 已实证）。
 export async function listAgentsForDisplay(): Promise<string> {
   const builtIn = listBuiltInAgents().map(a => ({ name: a.name, description: a.description }));
@@ -49,7 +49,7 @@ export async function listAgentsForDisplay(): Promise<string> {
  * 解析 /internal/v1/agents 响应（可测纯函数）。
  *
  * 实际形状兼容（2026-08-20 spawn 端到端实跑抓到的生产 bug）：daemon 端点
- * 返回 {agents, count, scope, tricompanyEnabled}（无 ok 字段），TriMC 面
+ * 返回 {agents, count, scope, tricompanyEnabled}（无 ok 字段），TriMMC 面
  * 可能带 ok —— 以 agents 数组为准，ok 仅可选兼容。非数组/缺失 → []（调用方
  * 保持 built-in 优先 / fallback 逻辑不变）。
  */
@@ -61,7 +61,7 @@ export function parseAgentsResponse(json: unknown): Array<Record<string, unknown
 
 // ── FADE-ASSESS-005：分身门禁（上岗 gating）──
 // 名册 = 分身的组织前提：未上岗 JD（pending-cho/candidate）不应 spawn 分身。
-// daemon 在 createTriLCApp.start() 注入 roster gate（读 CompanyInitState.employees）；
+// daemon 在 createTriRLCApp.start() 注入 roster gate（读 CompanyInitState.employees）；
 // 未注入（独立使用/单测）→ 放行 + console.warn，保持向后兼容。
 type RosterGateFn = (roleId: string) => Promise<{ status: string } | undefined>;
 

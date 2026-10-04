@@ -2,7 +2,7 @@
 // Dev's app-json-dedup-shape.test.ts is a STATIC source-code shape guard for
 // the JSON routes in src/server/app.ts. It pins the literal fix pattern but
 // does NOT execute the collection loop. This file closes that gap by exercising
-// the production JSON route handlers end-to-end through createTriLCApp.
+// the production JSON route handlers end-to-end through createTriRLCApp.
 //
 // Strategy:
 //   1. Spawn a stub HTTP server that speaks the DeepSeek OpenAI-compatible
@@ -11,7 +11,7 @@
 //      DeepSeek API sends. agentLoop internally calls DeepSeekProvider.stream
 //      which consumes this stub.
 //   2. Point DEEPSEEK_BASE_URL at the stub; provide a dummy DEEPSEEK_API_KEY.
-//   3. Boot createTriLCApp on an ephemeral port and hit:
+//   3. Boot createTriRLCApp on an ephemeral port and hit:
 //        B. POST /v1/messages (stream:false)   — Anthropic JSON
 //        D. POST /chat/completions (stream:false) — OpenAI JSON
 //   4. Assert response.content strictly equals "Hello world" — NOT the
@@ -27,7 +27,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import { createServer as createHttpServer, type Server } from 'node:http';
-import { createTriLCApp } from '../../src/server/app.js';
+import { createTriRLCApp } from '../../src/server/app.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -74,7 +74,7 @@ function getPort(server: Server): number {
 
 let stubServer: Server;
 let stubPort: number;
-let app: ReturnType<typeof createTriLCApp>;
+let app: ReturnType<typeof createTriRLCApp>;
 let appPort: number;
 let tmpDataDir: string;
 
@@ -125,10 +125,10 @@ before(async () => {
   // Point trimodelApiUrl at a closed port so initKeyCache degrades fast.
   env.trimodelApiUrl = 'http://127.0.0.1:1';
 
-  app = createTriLCApp(env);
+  app = createTriRLCApp(env);
   await app.start();
 
-  // createTriLCApp mutates env.port to the actual bound port (env.port = addr.port).
+  // createTriRLCApp mutates env.port to the actual bound port (env.port = addr.port).
   appPort = env.port;
   if (!appPort) throw new Error('app did not bind a port');
 });
