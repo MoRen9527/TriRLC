@@ -172,6 +172,25 @@ class AgentContractResolver {
     const agentId = parsed.contract.agent_id;
     const family = parsed.contract.family;
 
+    // loadOne family 分支（TriMLC 修法稿同构移植，CTO 2026-10-05 收敛窗）：
+    // loadOne 服务 Role 族面——非 Role（Registry 等）早退 return null+warn
+    // （禁裸断言；family 判别收窄同时令 paths 必填形成立=类型真值追平）。
+    if (family !== 'Role') {
+      console.warn(`[contract-resolver] skip non-Role contract: ${agentId} (family=${family})`);
+      return null;
+    }
+
+    // 新 schema 类型真值（agent-core PathsSchema 2fb1292）：soul/memory/
+    // colleagues/social 转 optional——逐字段守卫跳过+warn（fail-closed 非裸断言；
+    // 路径字段缺失=契约不完整，非文件暂缺）。
+    if (!parsed.paths.soul || !parsed.paths.agent_body || !parsed.paths.agent_frontmatter ||
+        !parsed.paths.memory || !parsed.paths.colleagues || !parsed.paths.social) {
+      const missing = (['soul', 'agent_body', 'agent_frontmatter', 'memory', 'colleagues', 'social'] as const)
+        .filter((k) => !parsed.paths[k]);
+      console.warn(`[contract-resolver] skip ${agentId}: paths missing (${missing.join(', ')})`);
+      return null;
+    }
+
     // v3 schema 保证六文件路径必填非空
     const paths: Required<AgentContract['paths']> = {
       soul: parsed.paths.soul,

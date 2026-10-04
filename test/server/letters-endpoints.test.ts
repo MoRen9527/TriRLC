@@ -104,6 +104,13 @@ before(async () => {
   const env = readEnv();
   env.port = 0;
   env.trimodelApiUrl = 'http://127.0.0.1:1';
+  // R1 稳定化（LG-059 收敛窗 CTO 2026-10-05）：默认模型链注入死模型名，令
+  // stream 连接的 model check（validateModelAgainstRegistry）在任何环境下
+  // 必败 → 连接即 task_error 结构行为成为确定性断言对象——2ab47df 校准把
+  // 该 task_error 误定性为「未注册 runner 结构行为」（实为 model check 路径，
+  // src:3540-3543=origin 版行号），环境绑定（origin 注册表缺模型恰绿/本机
+  // 19 models 全含则红）。死模型名显式触发=环境解耦，断言语义不变。
+  process.env.TRIMODEL_DEFAULT_MODEL = 'no-such-model-r1-stability';
 
   app = createTriRLCApp(env);
   await app.start();

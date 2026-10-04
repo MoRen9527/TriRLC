@@ -1,7 +1,7 @@
 // ── LG-058 N4 config 端点真链路（HTTP 层）：五路由过 P0 门 + boot pull→show/pull/verify/cache clear 全周期 ──
 //
 // STE 纪律（09-15 第三次命中教训）：新端点必配真链路案——单测直调四函数
-// 不覆盖 app.ts 路由注册/URL 拼写/门集成，此处以 createTriLCApp 真实
+// 不覆盖 app.ts 路由注册/URL 拼写/门集成，此处以 createTriRLCApp 真实
 // HTTP 全链路补位。mock TriModel 上游随 boot pull 自然进食。
 
 import { describe, it, before, after } from 'node:test';
@@ -10,13 +10,13 @@ import { createServer, type Server } from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createTriLCApp } from '../../src/server/app.js';
+import { createTriRLCApp } from '../../src/server/app.js';
 import { stopKeyCache } from '../../src/config/key-cache.js';
 
 const SAVED_ENV: Record<string, string | undefined> = {};
 
 let tmpDataDir: string;
-let app: ReturnType<typeof createTriLCApp>;
+let app: ReturnType<typeof createTriRLCApp>;
 let appPort: number;
 let mock: Server;
 let mockPort: number;
@@ -78,7 +78,7 @@ before(async () => {
   env.port = 0;
   env.trimodelApiUrl = `http://127.0.0.1:${mockPort}`;
 
-  app = createTriLCApp(env);
+  app = createTriRLCApp(env);
   await app.start();
   appPort = env.port;
   if (!appPort) throw new Error('app did not bind a port');
