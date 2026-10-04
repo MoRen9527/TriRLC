@@ -3,7 +3,7 @@
 import { mkdtemp, mkdir, writeFile, readFile, copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { createTriLCApp } from '../src/server/app.js';
+import { createTriRLCApp } from '../src/server/app.js';
 import { readEnv } from '../src/config/env.js';
 import { defaultChainFile } from '../src/company/init-chain.js';
 
@@ -34,12 +34,12 @@ delete process.env.TRILC_WEEKLY_PLANE_ROOT;
 
 const EVIDENCE_DIR = resolve('D:/Code/ai/TriCompany/docs/engineering/fade-papers/FADE-004-evidence');
 
-let app: ReturnType<typeof createTriLCApp>;
+let app: ReturnType<typeof createTriRLCApp>;
 try {
   const env = readEnv();
   env.port = 0;
   env.trimodelApiUrl = 'http://127.0.0.1:1';
-  app = createTriLCApp(env);
+  app = createTriRLCApp(env);
   await app.start();
   const port = env.port;
   if (!port) throw new Error('app did not bind a port');
