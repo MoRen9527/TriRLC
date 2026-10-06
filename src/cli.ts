@@ -323,8 +323,16 @@ async function cmdStop(port: number = DEFAULT_PORT): Promise<void> {
         console.log(`[trilc] daemon stopped via signal (pid=${pid})`);
       } else {
         try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
-        await waitProcessExit(pid, 3000);
-        console.log(`[trilc] daemon force-killed (pid=${pid})`);
+        const forceExited = await waitProcessExit(pid, 3000);
+        if (forceExited) {
+          console.log(`[trilc] daemon force-killed (pid=${pid})`);
+        } else {
+          // fail-loud（LG-064 §八裁决②）：SIGKILL 后仍存活（提权/异属主进程，
+          // EPERM kill 不掉）——禁报成功，exit 1 走人工路径。
+          console.error(`[trilc] FAILED to stop daemon (pid=${pid}): still alive after SIGKILL — manual intervention required (elevated/foreign-owner process).`);
+          process.exitCode = 1;
+          return;
+        }
       }
       await removePidFile();
       return;
@@ -371,26 +379,36 @@ async function cmdStop(port: number = DEFAULT_PORT): Promise<void> {
     console.log(`[trilc] daemon stopped via signal (pid=${owner.pid})`);
   } else {
     try { process.kill(owner.pid, 'SIGKILL'); } catch { /* already gone */ }
-    await waitProcessExit(owner.pid, 3000);
-    console.log(`[trilc] daemon force-killed (pid=${owner.pid})`);
+    const forceExited = await waitProcessExit(owner.pid, 3000);
+    if (forceExited) {
+      console.log(`[trilc] daemon force-killed (pid=${owner.pid})`);
+    } else {
+      // fail-loud（LG-064 §八裁决②）：同 Case A——SIGKILL 后仍存活禁报成功。
+      console.error(`[trilc] FAILED to stop daemon (pid=${owner.pid}): still alive after SIGKILL — manual intervention required (elevated/foreign-owner process).`);
+      process.exitCode = 1;
+    }
   }
 }
 
 async function gracefulShutdown(port: number): Promise<boolean> {
   try {
     const url = `http://127.0.0.1:${port}/shutdown`;
-    await new Promise<void>((resolve, reject) => {
+    const status = await new Promise<number>((resolve, reject) => {
       import('node:http').then((http) => {
         const req = http.request(url, { method: 'POST', timeout: 3000 }, (res) => {
           res.resume();
-          res.on('end', resolve);
+          res.on('end', () => resolve(res.statusCode ?? 0));
         });
         req.on('error', reject);
         req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
         req.end();
       });
     });
-    return true;
+    // stop 假成功修（LG-064 §八裁决②，2026-10-06）：仅 2xx=shutdown 被接受。
+    // 请求完成≠生效——4xx/5xx（token 拒/路由不匹配/daemon 半死）原实现同样
+    // resolve=true →「stopped gracefully」假成功。非 2xx 返 false 走 SIGTERM
+    // 分支（fail-loud：报错+强停+终态核验，见 cmdStop 两处 final-exit 检查）。
+    return status >= 200 && status < 300;
   } catch {
     return false;
   }

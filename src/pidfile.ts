@@ -84,12 +84,23 @@ export async function unregisterPid(port?: number): Promise<void> {
 
 // ── Process liveness ──
 
+/**
+ * process.kill(pid, 0) 错误码 → 活性判定（纯函数，白盒可测）。
+ * stop 假成功修（LG-064 §八裁决②，2026-10-06）：EPERM=进程在但本上下文无权
+ * 发信号（提权/异属主 daemon）——判活≠可控，活着就是活着；仅 ESRCH（进程不
+ * 存在）=死。catch 一把抓曾把 EPERM 误判死 → cmdStop 走 stale-pid 分支误删
+ * pidfile 报「not running」= 假成功链根。
+ */
+export function livenessFromKillError(code: string | undefined): boolean {
+  return code === 'EPERM';
+}
+
 export function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    return false;
+  } catch (err) {
+    return livenessFromKillError((err as NodeJS.ErrnoException).code);
   }
 }
 

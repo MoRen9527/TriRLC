@@ -96,6 +96,26 @@ describe('registerPid / unregisterPid (daemon-side ownership)', () => {
   });
 });
 
+describe('isProcessAlive / livenessFromKillError (stop 假成功修, LG-064 §八裁决②)', () => {
+  it('EPERM (process exists, no signal permission) = ALIVE — the false-negative root', () => {
+    assert.equal(pidfile.livenessFromKillError('EPERM'), true);
+  });
+
+  it('ESRCH (no such process) = dead', () => {
+    assert.equal(pidfile.livenessFromKillError('ESRCH'), false);
+  });
+
+  it('any other errno / undefined code = dead (fail toward dead, live path is the affirmative one)', () => {
+    assert.equal(pidfile.livenessFromKillError('EINVAL'), false);
+    assert.equal(pidfile.livenessFromKillError(undefined), false);
+  });
+
+  it('real paths: own pid alive, absurd pid dead', () => {
+    assert.equal(pidfile.isProcessAlive(process.pid), true);
+    assert.equal(pidfile.isProcessAlive(2 ** 30), false);
+  });
+});
+
 describe('waitProcessExit', () => {
   it('resolves true once a short-lived child exits', async () => {
     const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 50)']);

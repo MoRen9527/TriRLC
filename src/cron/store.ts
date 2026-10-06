@@ -368,6 +368,34 @@ export function createCronStore(dbPath: string) {
     if (idx >= 0) jobs[idx] = rowToJob(row);
   }
 
+  // ── Boot recovery sweep（LG-064 §八裁决② scope 增补，2026-10-06）──
+
+  /**
+   * 上一 boot 崩溃/强停残留的 running 态归位 idle（daemon 启动时调用，先于
+   * runMissedJobs）。残留 running 会使补跑洪峰竞态后引擎互斥永不重触发
+   * （l2-scan 永卡族实证形态：nextRun 冻结+不自愈）。返回归位条数。
+   */
+  function resetStaleRunningJobs(): number {
+    const now = new Date().toISOString();
+    const result = db
+      .prepare("UPDATE cron_jobs SET state = 'idle', updated_at = ? WHERE state = 'running'")
+      .run(now);
+    const changed = Number(result.changes ?? 0);
+    if (changed > 0) {
+      // 逐行刷新内存（不能用 loadAll：其 mtime 守卫在 WAL 模式下看不到主 db
+      // 文件变化 → 缓存陈旧 → 判定面仍读 running）。对齐 updateJobRun 刷新形态。
+      for (let i = 0; i < jobs.length; i++) {
+        if (jobs[i].state === 'running') {
+          const row = db.prepare("SELECT * FROM cron_jobs WHERE id = ?").get(jobs[i].id) as unknown as CronJobRow;
+          jobs[i] = rowToJob(row);
+        }
+      }
+      saveCronStore();
+      console.log(`[cron] boot recovery: reset ${changed} stale running job(s) to idle`);
+    }
+    return changed;
+  }
+
   // ── Execution Log (Phase 3) ──
 
   function addExecutionLog(
@@ -418,6 +446,7 @@ export function createCronStore(dbPath: string) {
     listJobs,
     updateJob,
     updateJobRun,
+    resetStaleRunningJobs,
     addExecutionLog,
     getExecutionLogs,
     getRecentExecutionLogs,
