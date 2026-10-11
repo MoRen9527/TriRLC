@@ -2,6 +2,7 @@ import { readFileSync, unlinkSync } from 'node:fs';
 import { readEnv } from './config/env.js';
 import { LocalRuntimeDaemon } from './runtime/daemon.js';
 import { createTriRLCApp } from './server/app.js';
+import { installCrashHandlers } from './crash-handler.js';
 import { PID_FILE, pidFileFor } from './paths.js';
 // REQ-018: daemon owns its PID file — register after listen, unregister on exit.
 import { registerPid, unregisterPid } from './pidfile.js';
@@ -164,6 +165,11 @@ async function main(): Promise<void> {
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
+
+  // 补窗 2026-10-11 件A（TriMLC fc44904 同构回流）：全局崩溃 handler——运行期异步未捕获
+  // 异常→crash.log 结构化日志（env.dataDir 下）+受控 exit(1) 交 watchdog revive（pidfile
+  // 由下方 exit 钩子清）。收口「零 handler 静默 crash」同源缺口；TRILC_CRASH_LOG_ONLY=1 回滚通道。
+  installCrashHandlers({ logDir: env.dataDir });
 
   // Synchronous fallback so the PID file is cleaned even if shutdown()
   // above never runs to completion (e.g. uncaught error path exits).
