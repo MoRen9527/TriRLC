@@ -117,6 +117,9 @@ import {
 } from '../company/staffing.js';
 import { createSessionReaper } from '../cron/session-reaper.js';
 import { createMinimalCronEngine, type MinimalCronEngine } from '../cron/service.js';
+// LG-069 二期从闸（8711 follower·稿 a00045f1 §四.3/.4）：healthz 免鉴权只读面轮询
+// 8713 主闸闸态，hard → 自闸停新派发；TRILC_POWER_FOLLOW 缺省 off=完全旁路。
+import { startPowerFollower } from '../power-follower.js';
 import { createUpdateCheckHandler, startUpdateCheckLoop } from '../update/update-check.js';
 // FADE-ASSESS-005 分身门禁：AgentTool 合同员工 spawn 前置校验 roster.active。
 import { setRosterGate, setOnSpawnGateDenied } from '../tools/agent-tool.js';
@@ -1468,6 +1471,19 @@ export function createTriRLCApp(env: TriRLCEnv) {
     wake: () => heartbeatRunner.requestHeartbeatNow({ reason: 'action' }),
   });
 
+  // ── LG-069 二期从闸（稿 §四.3 生命周期挂接面）──
+  // env 开关缺省 off=完全旁路（回滚通道）；poll 面 healthz 免鉴权只读（稿 §2.2 裁据）。
+  const powerFollower = process.env.TRILC_POWER_FOLLOW === '1'
+    ? startPowerFollower({
+        primaryUrl: process.env.TRILC_FOLLOW_PRIMARY_URL || 'http://127.0.0.1:8713/healthz',
+        pollMs: Number(process.env.TRILC_FOLLOW_POLL_MS || '') || 60_000,
+        staleMs: Number(process.env.TRILC_FOLLOW_STALE_MS || '') || 5 * 60_000,
+      })
+    : null;
+  if (powerFollower) {
+    console.log(`[trilc:follow] power follower started (LG-069 phase2, primary=${process.env.TRILC_FOLLOW_PRIMARY_URL || 'http://127.0.0.1:8713/healthz'})`);
+  }
+
   // ── Minimal Cron Engine ──
   const cronEngine: MinimalCronEngine = createMinimalCronEngine({
     dataDir: env.dataDir,
@@ -1483,6 +1499,8 @@ export function createTriRLCApp(env: TriRLCEnv) {
     },
     // FADE-ASSESS-005 调度门禁：绑定 roleId 的 job 拉起 agent 前校验 roster.active。
     isRoleActive: async (roleId) => isRoleActive(staffingDeps, roleId),
+    // LG-069 从闸 dispatch gate：主闸 hard → 停新派发（在跑不中断；follower 未启用=恒 true 零影响）。
+    shouldDispatchNewJobs: () => !powerFollower?.isHard(),
     // FADE-ASSESS-003 小乔指标：调度路由到未在岗岗 → routing_error 埋点（轻量）
     onRoleGateDenied: (roleId) => {
       recordKnowledgeMetric({
@@ -1768,6 +1786,11 @@ export function createTriRLCApp(env: TriRLCEnv) {
             sessionReaper: {
               enabled: sessionReaper.isRunning(),
             },
+            // LG-069 从闸四键（稿 §四.4·与 8713 power 段观测面对称）：
+            // TRILC_POWER_FOLLOW 未启用=null（bod-tick runner 已兼容 absent 形）。
+            follower: powerFollower
+              ? powerFollower.healthz()
+              : null,
           }));
           return;
         }
@@ -4914,6 +4937,7 @@ export function createTriRLCApp(env: TriRLCEnv) {
       heartbeatRunner.stop();
       mirrorPusher.stop();
       updateCheckLoop?.stop();
+      powerFollower?.stop(); // LG-069 从闸 poll 循环停（shutdown 链同步面）
       connMgr.stopHealthCheckLoop();
       stopKeyCache();
       cancelAllShellProcesses();

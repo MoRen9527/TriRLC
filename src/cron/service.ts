@@ -50,6 +50,8 @@ export interface CronServiceDeps {
   isRoleActive?: (roleId: string) => Promise<boolean>;
   /** FADE-ASSESS-003 小乔指标：roleId 门禁拒绝回调（透传至 timer；缺省静默）。 */
   onRoleGateDenied?: (roleId: string) => void;
+  /** LG-069 从闸 dispatch gate（透传至 timer；缺省 true=零旁路影响）。 */
+  shouldDispatchNewJobs?: () => boolean;
 }
 
 // Backward-compatible alias
@@ -72,6 +74,7 @@ export function createCronService(deps: CronServiceDeps): CronService {
     onJobTrigger,
     isRoleActive: deps.isRoleActive,
     onRoleGateDenied: deps.onRoleGateDenied,
+    shouldDispatchNewJobs: deps.shouldDispatchNewJobs,
   };
 
   // ── Public API ──

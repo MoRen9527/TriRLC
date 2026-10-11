@@ -54,6 +54,9 @@ export interface CronTimerDeps {
   isRoleActive?: (roleId: string) => Promise<boolean>;
   /** FADE-ASSESS-003 小乔指标：roleId 门禁拒绝回调（daemon 注入埋点；缺省静默）。 */
   onRoleGateDenied?: (roleId: string) => void;
+  /** LG-069 从闸 dispatch gate（TriMLC 同构形）：false → 新派发 skip（power_gate_hard），
+   * 在跑不中断；手动 runJobNow 面不经此闸=人决面保持开放。缺省 true=零旁路影响。 */
+  shouldDispatchNewJobs?: () => boolean;
 }
 
 export interface CronTimerState {
@@ -256,6 +259,12 @@ async function executeJobCore(deps: CronTimerDeps, job: CronJob): Promise<JobExe
   const gate = await shouldRunJob(deps, job);
   if (!gate.run) {
     return { status: "skipped", error: gate.reason };
+  }
+
+  // LG-069 从闸 dispatch gate（稿 §四.2 插点正形=shouldRunJob 之后、command/agent
+  // 分支之前）：主闸 hard → 新派发 skip（在跑不中断）。
+  if (deps.shouldDispatchNewJobs && !deps.shouldDispatchNewJobs()) {
+    return { status: "skipped", error: "power_gate_hard" };
   }
 
   // REQ-20260806-019: deterministic command execution (no LLM).
