@@ -236,6 +236,17 @@ export function createCronStore(dbPath: string) {
       input.enabled ? 1 : 0, now, now,
     );
 
+    // F-3+ fix (S3 wave, 2026-10-10): recompute next_run_at right after INSERT,
+    // same path as updateJob's schedule branch below, so the timer's enabledJobs
+    // filter (j.enabled && j.nextRunAt) picks the new job up immediately.
+    // Without this, a freshly-added job has NULL next_run_at and never fires.
+    try {
+      const sched = parseCronSchedule(input.schedule as never);
+      const next = sched.nextRunMs();
+      db.prepare("UPDATE cron_jobs SET next_run_at = ? WHERE id = ?")
+        .run(next ? new Date(next).toISOString() : null, id);
+    } catch { /* keep NULL on parse failure; boot sweep / later PATCH can recover */ }
+
     const row = db.prepare("SELECT * FROM cron_jobs WHERE id = ?").get(id) as unknown as CronJobRow;
     const job = rowToJob(row);
     jobs.push(job);

@@ -4786,6 +4786,10 @@ export function createTriRLCApp(env: TriRLCEnv) {
       }
 
       console.log(`[trilc] listening on :${env.port}`);
+      // S3 wave 2026-10-10 (DATA_DIR unification observability): log the
+      // resolved store location once at startup — split-brain detection anchor
+      // (dual-store regression would show two different paths across restarts).
+      console.log(`[trilc] data dir: ${env.dataDir}`);
 
       // S7: Start mirror pusher (event-driven + 30s heartbeat)
       mirrorPusher.start();
