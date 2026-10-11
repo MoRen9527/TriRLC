@@ -24,7 +24,9 @@ const CONSECUTIVE_FAILURE_DEGRADED_THRESHOLD = 3;
 // ── Internal types ──
 
 export interface CronStoreLike {
-  addJob(input: { name: string; schedule: { kind: string; everyMs?: number; expr?: string; tz?: string }; systemPrompt: string; enabled: boolean }): CronJob;
+  // enabled?: boolean（补窗 2026-10-11 件C 同步）：缺省语义=true（store 层
+  // ?? true 归一）——与 CronJobCreate.enabled 可选一致，双变检查两向通。
+  addJob(input: { name: string; schedule: { kind: string; everyMs?: number; expr?: string; tz?: string }; systemPrompt: string; enabled?: boolean }): CronJob;
   removeJob(id: string): boolean;
   getJob(id: string): CronJob | undefined;
   listJobs(): CronJob[];

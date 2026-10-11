@@ -45,11 +45,18 @@ export interface CronJob {
   errorCount: number;
 }
 
-/** Input to create a new cron job (auto-generated fields omitted). */
-export type CronJobCreate = Omit<
+/** Input to create a new cron job (auto-generated fields omitted).
+ * enabled optional（补窗 2026-10-11 件C·TriMLC baf800d 同构回流）：缺省语义=true
+ * （store 层 ?? true 归一·对齐 schema DEFAULT 1）——类型面承认缺省，防调用方被迫传假必填。
+ * 写法注记：interface extends Omit 惯形而非 `Omit & {...}` 交叉——交叉形会
+ * 破坏 CronStoreLike.addJob 方法语法依赖的参数双变通路（TriMLC service.ts 装配
+ * check 实证），interface 同构形行为与原 Omit 一致。 */
+export interface CronJobCreate extends Omit<
   CronJob,
-  "id" | "state" | "createdAt" | "updatedAt" | "runCount" | "errorCount"
->;
+  "id" | "state" | "createdAt" | "updatedAt" | "runCount" | "errorCount" | "enabled"
+> {
+  enabled?: boolean;
+}
 
 /** Patch for updating an existing cron job. All fields optional. */
 export interface CronJobPatch {

@@ -233,7 +233,11 @@ export function createCronStore(dbPath: string) {
     stmt.run(
       id, input.name, scheduleKind, scheduleValue, scheduleTz,
       input.systemPrompt, input.command ?? null, input.roleId ?? null,
-      input.enabled ? 1 : 0, now, now,
+      // 补窗 2026-10-11 件C（F-3 第三型·TriMLC baf800d 同构回流）：enabled 缺省归一
+      // true——显式传 undefined（HTTP 路由展开 body 缺字段）此前落 0=静默禁用且 GET
+      // 可见却永不调度。?? true 对齐 schema DEFAULT 1 意图；显式 false 保持 0。store 层
+      // 归一即全入口覆盖（app.ts 路由面不动）。
+      ((input.enabled ?? true)) ? 1 : 0, now, now,
     );
 
     // F-3+ fix (S3 wave, 2026-10-10): recompute next_run_at right after INSERT,

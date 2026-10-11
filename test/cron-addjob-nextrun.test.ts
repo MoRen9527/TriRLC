@@ -123,3 +123,35 @@ describe('F-3+ addJob recompute next_run_at (法 B)', () => {
     assert.ok(store.getJob(job.id)?.nextRunAt, '内存面同步');
   });
 });
+
+describe('F-3 第三型 enabled 缺省归一（件C 回归钉）', () => {
+  it('enabled 缺省 → 库落 1 回读 true（含冷载面）', () => {
+    const dbPath = join(tmpDir, `cron-f3c-${Math.random().toString(36).slice(2)}.db`);
+    const store = createCronStore(dbPath);
+    stores.push(store);
+    const job = store.addJob({
+      name: 'f3c-default', schedule: { kind: 'every', everyMs: 300_000 },
+      systemPrompt: 't',
+      // enabled 故意缺省——HTTP body 缺字段透传路径的 store 层等价形
+    } as Parameters<typeof store.addJob>[0]);
+    assert.equal(job.enabled, true, '缺省 enabled 必须归一 true（store 层）');
+    const row = store.db.prepare('SELECT enabled FROM cron_jobs WHERE id = ?').get(job.id) as { enabled: number };
+    assert.equal(row.enabled, 1, 'sqlite enabled 列必须落 1');
+    store.db.close();
+    const store2 = createCronStore(dbPath);
+    stores.push(store2);
+    assert.equal(store2.getJob(job.id)?.enabled, true, '冷载回读面同断言');
+    store2.db.close();
+  });
+
+  it('显式 false 不过度归一（保持 0）', () => {
+    const store = makeStore();
+    const job = store.addJob({
+      name: 'f3c-explicit-false', schedule: { kind: 'every', everyMs: 300_000 },
+      systemPrompt: 't', enabled: false,
+    });
+    assert.equal(job.enabled, false, '显式 false 保持禁用');
+    const row = store.db.prepare('SELECT enabled FROM cron_jobs WHERE id = ?').get(job.id) as { enabled: number };
+    assert.equal(row.enabled, 0, 'sqlite enabled 列落 0');
+  });
+});
