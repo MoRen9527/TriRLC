@@ -318,6 +318,13 @@ export async function executeJobCoreWithTimeout(
   timeoutMs = DEFAULT_JOB_TIMEOUT_MS,
 ): Promise<JobExecutionResult> {
   const jobPromise = executeJobCore(deps, job);
+  // 补窗 2026-10-11 件B（race 缺口根治·TriMLC cc52c89 同构回流）：job 在 timeout
+  // 先 settle 后滞后 reject 时，裸 jobPromise 的 rejection 无人接=unhandledRejection
+  // →（件A 前）node 默认 crash。guardedJob 把滞后 rejection 吸收转 error 结果——
+  // race 状态面零变，rejection 传播面归零。
+  const guardedJob = jobPromise.catch((err): JobExecutionResult => ({
+    status: "error", error: err instanceof Error ? err.message : String(err),
+  }));
   // 资源清理：race 结束后必须 clearTimeout 挂起的超时定时器——否则每次 job
   // run 泄漏一个 DEFAULT_JOB_TIMEOUT_MS(10min) 定时器，长驻 daemon 会堆积，
   // 测试进程也会因事件循环不空而无法退出（node:test 挂起被杀）。
@@ -325,7 +332,7 @@ export async function executeJobCoreWithTimeout(
   const timeoutPromise = new Promise<JobExecutionResult>((resolve) => {
     timer = setTimeout(() => resolve({ status: "timeout", error: `Job timed out after ${timeoutMs}ms` }), timeoutMs);
   });
-  const result = await Promise.race([jobPromise, timeoutPromise]);
+  const result = await Promise.race([guardedJob, timeoutPromise]);
   if (timer) clearTimeout(timer);
   return result;
 }
