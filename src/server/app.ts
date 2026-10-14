@@ -882,7 +882,7 @@ interface ConnectionManagerOptions {
 
 // ── ConnectionManager (2.5: local state + persistence + backoff) ──
 
-class ConnectionManager {
+export class ConnectionManager {
   private state: ConnectionState;
   private consecutiveFailures = 0;
   private consecutiveSuccesses = 0;
@@ -902,6 +902,12 @@ class ConnectionManager {
   private _applyReplayResponse: (connectionId: string, res: ReplayResponse, events: ReplayEventItem[]) => void;
   private recoveryCallback: (() => void) | null = null;
   private stateFile: string | null = null; // 2.5: persistence file path
+  // obs 卡②（2026-10-14）：累计失败计数投影（照 8713 power 段 readFailures 同构形）。
+  // consecutiveFailures 仅 connected 态计数且入 degraded 即清零=23h 盲区投影面缺口的
+  // 另一半；totalFailures 无条件累计（生命周期），lastFailureAt/Class 带最近一次形态。
+  private totalFailures = 0;
+  private lastFailureAt: string | null = null;
+  private lastFailureClass: string | null = null;
 
   // ── Heartbeat Wake (CTO-008-M Phase 1: extracted to heartbeat-wake module) ──
   private wake = createHeartbeatWake();
@@ -923,6 +929,15 @@ class ConnectionManager {
 
   get currentState(): ConnectionState {
     return this.state;
+  }
+
+  // obs 卡②：mc 失败计数投影 getter（healthz mc 段消费）
+  get mcProbe(): { totalFailures: number; lastFailureAt: string | null; lastFailureClass: string | null } {
+    return {
+      totalFailures: this.totalFailures,
+      lastFailureAt: this.lastFailureAt,
+      lastFailureClass: this.lastFailureClass,
+    };
   }
 
   recordSuccess(): void {
@@ -948,6 +963,10 @@ class ConnectionManager {
 
   recordFailure(): void {
     this.consecutiveSuccesses = 0;
+    // obs 卡②：无条件累计（connected/degraded 两态的失败都算——degraded 段失败
+    // 现役不计数，投影后 degraded 持续期可观测）
+    this.totalFailures += 1;
+    this.lastFailureAt = new Date().toISOString();
     if (this.state === 'connected') {
       this.consecutiveFailures++;
       if (this.consecutiveFailures >= this.failThreshold) {
@@ -975,7 +994,7 @@ class ConnectionManager {
         queueSize: this._queueSize(),
         uptimeSeconds: Math.floor((Date.now() - this.startTime) / 1000),
         agentCoreVersion: this.version,
-      });
+      }, 5000, (cls) => { this.lastFailureClass = cls; });
       if (ok) {
         this.recordSuccess();
         return true;
@@ -1790,6 +1809,14 @@ export function createTriRLCApp(env: TriRLCEnv) {
             mc_link: triMcOnline ? 'connected' : 'degraded',
             mc_peer: 'trirmc',
             trimc: triMcOnline ? 'connected' : 'degraded',
+            // obs 卡②（2026-10-14）：失败计数投影——嵌套 mc 段照 8713 power 段形。
+            // 顶层 mc_link 双写字段保留（消费方零破坏）。
+            mc: {
+              link: triMcOnline ? 'connected' : 'degraded',
+              totalFailures: connMgr.mcProbe.totalFailures,
+              lastFailureAt: connMgr.mcProbe.lastFailureAt,
+              lastFailureClass: connMgr.mcProbe.lastFailureClass,
+            },
             uptime,
             activeTasks,
             queueSize: eventQueue.getQueueSize(),
