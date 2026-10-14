@@ -878,6 +878,18 @@ interface ConnectionManagerOptions {
   queueSize?: () => number;
   getPendingForReplay?: (connectionId: string, limit?: number) => ReplayEventItem[];
   applyReplayResponse?: (connectionId: string, res: ReplayResponse, events: ReplayEventItem[]) => void;
+  /** obs 卡③：degraded 告警出向（app.ts 装配注入真函数；单测注 mock；不注入=告警禁用） */
+  notifyPost?: (payload: McAlarmPayload) => Promise<boolean>;
+}
+
+/** obs 卡③：sg notify payload 形（照 TriMLC power 段 /internal/v1/notify 同构） */
+export interface McAlarmPayload {
+  source_seat: string;
+  target_daemon: string;
+  target_seat: string;
+  urgent: boolean;
+  title: string;
+  body: string;
 }
 
 // ── ConnectionManager (2.5: local state + persistence + backoff) ──
@@ -908,6 +920,12 @@ export class ConnectionManager {
   private totalFailures = 0;
   private lastFailureAt: string | null = null;
   private lastFailureClass: string | null = null;
+  // obs 卡③（2026-10-14）：degraded 告警防抖（照 8713 power 段 dispatchNotify
+  // THRESHOLD 形——degradedFailures≥2 连且未发过才发一次；恢复重置可再告警）
+  private degradedFailures = 0;
+  private mcAlarmSent = false;
+  private notifyFailures = 0;
+  private readonly notifyPost?: (payload: McAlarmPayload) => Promise<boolean>;
 
   // ── Heartbeat Wake (CTO-008-M Phase 1: extracted to heartbeat-wake module) ──
   private wake = createHeartbeatWake();
@@ -921,6 +939,7 @@ export class ConnectionManager {
     this._queueSize = opts.queueSize ?? (() => 0);
     this._getPendingForReplay = opts.getPendingForReplay ?? (() => []);
     this._applyReplayResponse = opts.applyReplayResponse ?? (() => {});
+    this.notifyPost = opts.notifyPost;
     this.startTime = Date.now();
     if (this.state === 'local') {
       console.log('[trilc:conn] running in local mode — TriMMC not configured');
@@ -931,12 +950,15 @@ export class ConnectionManager {
     return this.state;
   }
 
-  // obs 卡②：mc 失败计数投影 getter（healthz mc 段消费）
-  get mcProbe(): { totalFailures: number; lastFailureAt: string | null; lastFailureClass: string | null } {
+  // obs 卡②：mc 失败计数投影 getter（healthz mc 段消费）；卡③扩 alarmSent/notifyFailures
+  get mcProbe(): { totalFailures: number; lastFailureAt: string | null; lastFailureClass: string | null; degradedFailures: number; mcAlarmSent: boolean; notifyFailures: number } {
     return {
       totalFailures: this.totalFailures,
       lastFailureAt: this.lastFailureAt,
       lastFailureClass: this.lastFailureClass,
+      degradedFailures: this.degradedFailures,
+      mcAlarmSent: this.mcAlarmSent,
+      notifyFailures: this.notifyFailures,
     };
   }
 
@@ -950,6 +972,9 @@ export class ConnectionManager {
         this.consecutiveSuccesses = 0;
         this.degradedAt = null; // 2.5: clear degraded timer
         this.healthCheckIntervalMs = 10_000; // 2.5: restore normal interval
+        // obs 卡③：恢复重置告警防抖（照 TriMLC recovered 重置形——下轮 degraded 可再告警）
+        this.degradedFailures = 0;
+        this.mcAlarmSent = false;
         console.log('[trilc:conn] recovered → connected');
         this.persistState();
         publish({ type: 'node:connected' });
@@ -982,6 +1007,41 @@ export class ConnectionManager {
       if (this.degradedAt && (Date.now() - this.degradedAt > this.DEGRADED_BACKOFF_MS)) {
         this.healthCheckIntervalMs = this.DEGRADED_SLOW_INTERVAL_MS;
       }
+      // obs 卡③：degraded 段告警防抖——degradedFailures≥2 且未发过才发一次。
+      // 转入 degraded 的那次失败计入 connected 分支（elif 不双计），degraded 态内
+      // 2 拍失败达阈值（照 l1 探针 debounce 2 拍同款）。
+      // notify 失败回滚 mcAlarmSent 允许下拍重试（自然退避=心跳 60s~5min 一拍）。
+      this.degradedFailures += 1;
+      if (this.degradedFailures >= 2 && !this.mcAlarmSent && this.notifyPost) {
+        this.mcAlarmSent = true; // 先置位防同拍重入
+        void this.sendDegradedAlarm();
+      }
+    }
+  }
+
+  // obs 卡③：degraded 告警出向（sg notify 链·文本零敏感值面——D-46 同守）
+  private async sendDegradedAlarm(): Promise<void> {
+    if (!this.notifyPost) return;
+    try {
+      const ok = await this.notifyPost({
+        source_seat: 'trirlc-conn',
+        target_daemon: 'trimmc',
+        target_seat: 'm-duty-cos',
+        urgent: true,
+        title: 'TRILC mc_link degraded',
+        body: `trirlc mc_link degraded; degradedFailures=${this.degradedFailures}; lastFailure=${this.lastFailureClass ?? 'unknown'}; lastFailureAt=${this.lastFailureAt ?? 'unknown'}`,
+      });
+      if (ok) {
+        console.log(`[trilc:conn] ${new Date().toISOString()} degraded alarm sent (sg notify)`);
+      } else {
+        this.notifyFailures += 1;
+        this.mcAlarmSent = false; // 允许下拍重试
+        console.log(`[trilc:conn] ${new Date().toISOString()} degraded alarm notify rejected (will retry)`);
+      }
+    } catch (err) {
+      this.notifyFailures += 1;
+      this.mcAlarmSent = false; // 允许下拍重试
+      console.log(`[trilc:conn] ${new Date().toISOString()} degraded alarm notify error (will retry): ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -1570,6 +1630,28 @@ export function createTriRLCApp(env: TriRLCEnv) {
     queueSize: () => eventQueue.getQueueSize(),
     getPendingForReplay: (cid, limit) => eventQueue.getPendingForReplay(cid, limit),
     applyReplayResponse: (cid, res, events) => eventQueue.applyReplayResponse(cid, res, events),
+    // obs 卡③（2026-10-14）：degraded 告警出向装配——配置了 sg notify URL 才注入
+    // （照 TriMLC powerNotifyPost 同构形：x-internal-token 头+5s 超时；空=告警禁用）
+    notifyPost: env.trimcNotifySgUrl
+      ? async (payload) => {
+          const ctrl = new AbortController();
+          const t = setTimeout(() => ctrl.abort(), 5000);
+          try {
+            const res = await fetch(`${env.trimcNotifySgUrl.replace(/\/$/, '')}/internal/v1/notify`, {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                'x-internal-token': env.trimcNotifySgToken,
+              },
+              body: JSON.stringify(payload),
+              signal: ctrl.signal,
+            });
+            return res.ok;
+          } finally {
+            clearTimeout(t);
+          }
+        }
+      : undefined,
   });
   connMgr.enablePersistence(env.dataDir);
 
@@ -1816,6 +1898,9 @@ export function createTriRLCApp(env: TriRLCEnv) {
               totalFailures: connMgr.mcProbe.totalFailures,
               lastFailureAt: connMgr.mcProbe.lastFailureAt,
               lastFailureClass: connMgr.mcProbe.lastFailureClass,
+              degradedFailures: connMgr.mcProbe.degradedFailures,
+              alarmSent: connMgr.mcProbe.mcAlarmSent,
+              notifyFailures: connMgr.mcProbe.notifyFailures,
             },
             uptime,
             activeTasks,

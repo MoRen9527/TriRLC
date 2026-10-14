@@ -2,6 +2,10 @@ export type TriRLCEnv = {
   nodeId: string;
   port: number;
   trimcBaseUrl: string;
+  /** obs 卡③（2026-10-14）: sg notify endpoint for mc_link degraded alarm (empty = alarm disabled) */
+  trimcNotifySgUrl: string;
+  /** obs 卡③: internal token for the sg notify endpoint */
+  trimcNotifySgToken: string;
   openclawGatewayUrl: string;
   vscodiumGlueBaseUrl: string;
   /** TriModel configuration-plane API base URL (Phase 1: http://127.0.0.1:3333) */
@@ -160,6 +164,10 @@ export function readEnv(): TriRLCEnv {
     // trimcBaseUrl：默认 127.0.0.1:8710=dev 同机形态（本机 TriMMC 部署）；
     // prod 覆盖走 env 注入（TRIMC_BASE_URL，LG-030 两形态并存合法性 2026-09-04）。
     trimcBaseUrl: process.env.TRIMC_BASE_URL ?? 'http://127.0.0.1:8710',
+    // obs 卡③（2026-10-14）：degraded 告警出向通道（照 TriMLC power 段 TRIMC_NOTIFY_SG
+    // 同构形）——空串=告警禁用（local 态/未配置面零行为）
+    trimcNotifySgUrl: process.env.TRIMC_NOTIFY_SG_URL ?? '',
+    trimcNotifySgToken: process.env.TRIMC_NOTIFY_SG_TOKEN ?? '',
     openclawGatewayUrl: process.env.OPENCLOW_GATEWAY_URL ?? 'ws://127.0.0.1:8822',
     vscodiumGlueBaseUrl: process.env.VSCODIUM_GLUE_BASE_URL ?? 'http://127.0.0.1:8730',
     trimodelApiUrl: process.env.TRILC_TRIMODEL_API_URL ?? 'http://127.0.0.1:3333',
