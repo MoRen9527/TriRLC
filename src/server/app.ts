@@ -1151,14 +1151,27 @@ class ConnectionManager {
   }
 }
 
-function postHeartbeat(baseUrl: string, hb: {
+export function postHeartbeat(baseUrl: string, hb: {
   nodeId: string;
   state: string;
   queueSize: number;
   uptimeSeconds: number;
   agentCoreVersion: string;
-}, timeoutMs = 5000): Promise<boolean> {
+}, timeoutMs = 5000, onFailureClass?: (cls: string) => void): Promise<boolean> {
+  // 卡①（obs 窗 2026-10-14）：失败分类日志——401 鉴权拒/404 端点缺/超时/网络错
+  // 各形态落 daemon.log（带 ISO 时戳），消「23h~1400 连败零暴露」盲区（mc_link
+  // degraded 案直接教训：布尔吞错后 401 伪装成 ok 假不可分型）。成功静默防洪水。
+  // 文本零敏感值面（D-46）：分类码+状态数字，零 token/头值。
+  // settled 守卫：resolve 后迟发事件（req.destroy() 补发 error 等）不再触发
+  // fail 双打——单测 timeout 用例实证（destroy 后 ECONNRESET 异步补发）。
   return new Promise((resolve) => {
+    let settled = false;
+    const settle = (v: boolean) => { if (!settled) { settled = true; resolve(v); } };
+    const fail = (cls: string) => {
+      if (settled) return;
+      console.log(`[trilc:conn] ${new Date().toISOString()} heartbeat failed: ${cls}`);
+      onFailureClass?.(cls);
+    };
     const urlObj = new URL('/internal/v1/heartbeat', baseUrl);
     const reqFn = urlObj.protocol === 'https:' ? httpsRequest : httpRequest;
     const body = JSON.stringify(hb);
@@ -1183,19 +1196,30 @@ function postHeartbeat(baseUrl: string, hb: {
         const chunks: Buffer[] = [];
         res.on('data', (c: Buffer) => chunks.push(c));
         res.on('end', () => {
+          const st = res.statusCode ?? 0;
+          if (st === 401 || st === 403) { fail(`auth-rejected (HTTP ${st})`); settle(false); return; }
+          if (st === 404) { fail('endpoint-missing (HTTP 404)'); settle(false); return; }
+          if (st < 200 || st >= 300) { fail(`http-${st}`); settle(false); return; }
           try {
             const data = JSON.parse(Buffer.concat(chunks).toString());
-            resolve(data.ok === true);
+            if (data.ok === true) { settle(true); return; }
+            fail('business-reject (2xx ok!=true)');
+            settle(false);
           } catch {
-            resolve(false);
+            fail('bad-body (2xx non-JSON)');
+            settle(false);
           }
         });
       },
     );
-    req.on('error', () => resolve(false));
+    req.on('error', (err) => {
+      fail(`network-${(err as NodeJS.ErrnoException).code ?? 'error'}`);
+      settle(false);
+    });
     req.on('timeout', () => {
       req.destroy();
-      resolve(false);
+      fail(`timeout (${timeoutMs}ms)`);
+      settle(false);
     });
     req.write(body);
     req.end();
