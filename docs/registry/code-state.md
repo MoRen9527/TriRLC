@@ -273,6 +273,17 @@
 - 单测 `test/tui-acp.test.ts` +8：假子进程注入（node -e responder·不 spawn 真 dsh）roundtrip/端到端 new→chunk 流→tool_call→settle blocks 序（含流中 pending 断言·FAKE_STREAM_DELAY_MS 分批流送）/硬超时/exit 清 pending/lifecycle resume 编排（stderr CALL 序）/映射全类型/D-46 debug 零内容面/横幅混流。全量 757/757 绿（零既有破）。
 - 段 2 候窗（非本段）：真 dsh 联调+渲染走查（非作者手测+UI 交付渲染验证门）+部署面（Windows dsh 装机/凭据装载）。
 
+### TUI ACP 子进程面·段 2a 收口（2026-10-20，commit 5586fb3）
+
+- **河源真 dsh 0.2.0-rc.2 四断言全绿**（隔离 HOME=/tmp/acp-lt-1020/home·store 凭据 cp 不 cat·现役零触碰）：①create new 66f06d20→②prompt settle end_turn 3.8s 真 DeepSeek→③独立进程二挂 resume 同 id end_turn 3.2s→④close 双案 ok+dispose 净收（P0'「close 后 resumable」复现）。
+- **债 2 收**：六 method 名零 diff（initialize/session/list/session/new/session/resume/session/prompt/session/close 与 dsh-acp README 契约表逐一相符）——`ACP_METHODS` 单点未改。update 判别名实锚：agent_message_chunk/usage_update（与段 1 映射表一致）。
+- **债 3 勘清**：cancel=`session/cancel`/`$/cancel_request` 通知形·prompt-owned·未知 sessionId no-op（README 契约表；`session/set_config_option`=model/reasoning_effort 更新位）。
+- **债 5 新入册（候窗）**：`session/request_permission`+fs/terminal CLIENT_METHODS 入站请求系——AcpClient 对入站请求（带 id 带 method 帧）静默忽略，触发场景=用户让 dsh 跑工具（permission/终端/文件面）——纯文本对话不受影响；偿还形=TUI 正形 permission 自动应答（候窗·架构边界内裁）。
+- **观察项收口（段 2 派工第 5 项）**：`cmdChat --acp` early-return 跳 daemon ensure 链/notifications/init 流程——TUI 启动段提炼 `startChatTui()` daemon 面尾部与 acp 面共享；`parseArgs` 加 export+单测 t9（解析契约三断言）。门禁：tsc 0 错/ACP 案组 9/9/全量 758/758 零回归。
+- **联调探针**：`test/acp-lt-probe.mts`（live 工具·需真 dsh+store 凭据·不在 npm test glob）——create/resume 两模式·D-46 输出面（只出 sessionId/stopReason/判别谱/耗时）。
+- 勘定谱漏网教训（如实记）：credentials store 在 `/home/fleet/.dsh/.credentials.yaml`（fleet 用户家点文件）——初勘全程对 /root/.dsh（root 家）=用户位错位，find 字面 glob 不现点文件形；「600」语义=dsh credentials service（web Models page 写入）。
+- 段 2b 候窗：tmux 渲染走查（trirlc chat --acp 首启+一问一答+退出重进 resume 链·非作者手测+UI 交付渲染验证门）。
+
 ## Sources
 
 - `../../src/runtime/`
