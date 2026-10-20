@@ -263,6 +263,16 @@
 - transitionTo 转移表零改动（门禁 7）；两入口（TriPilot/trilc chat）零执行增量，只读呈现 firstCollab 状态（门禁 6）。
 - 单测 +6：链态门 409 / 合法转移逐级 / 跳级拒绝 / 回退拒绝 / 重放幂等 / 载荷校验。全量 415/416（1 fail = test/tui/components.test.ts 环境缺口既有，基线 409/410 口径不退化）。
 
+### TUI ACP 子进程面（`src/tui/acp/` + `src/tui/hooks/useAcpSession.ts`，D' 段 1）
+
+- **架构真源**：TriMetaverse `docs/execution/dprime-tui-acp-architecture-20261020.md`（BOD 2026-10-20 18:19:47 接续准令）——四裁决：①零 SDK 依赖自写帧层 ②`--acp` flag 后端选择·缺省 useChat 零动 ③生命周期 list→resume 最新/无段 new·退出 close ④历史显示 v1=续挂。
+- `src/tui/acp/acp-client.ts`（新）：spawn(`env DSH_BIN ?? 'dsh'`, `['--profile','acp']`) + newline-delimited JSON-RPC 帧（5 请求 initialize/session/list/session/new/session/resume/session/prompt + 1 通知 session/update + session/close 附加）·pending map 硬超时（请求 60s 缺省/prompt 15min·构造 `promptTimeoutMs` 注入缝）·stderr 4KB 尾捕·exit 清 pending·非 JSON 行静默忽略。method 名集中 `ACP_METHODS`（段 2 对真 dsh 联调单点校形）。
+- `src/tui/acp/session-mapping.ts`（新）：session/update → ContentBlock 纯映射（架构稿 §二映射表·REGR-005 有序块为靶）——agent_message_chunk 增量/agent_thought_chunk→thinking/tool_call→tool_use pending/tool_call_update→toolStatus+tool_result/plan→TodoTask/usage_update→token 读数/user_message_chunk 及未知判别忽略·settleStreaming 落尾。React 无关纯函数（node:test 直测面）。
+- `src/tui/hooks/useAcpSession.ts`（新）：useChat 对外接口形全覆盖（app.tsx L101 消费面）+ `todos`/`phase` 扩展——生命周期编排（initialize→list{cwd}→resume 最新/session new）、prompt settlement（response stopReason·无 idle 猜测）、unmount close（P0' 实证 close 后段仍 resumable）。React 壳零测试渲染器（react 19 无 standalone renderer）——hook 绑定面归段 2 渲染走查（技术债如实：自动化测止于 client+mapping 组合链）。
+- CLI 接线：`parseArgs --acp`（布尔）→`cmdChat(acp)`→`startTUI({backend:'acp'})`→render/App props——app.tsx 双 hook 恒序调用（rules-of-hooks·enabled=false 惰性零 spawn）·`--resume` 与 `--acp` 并给时 ACP 自管为准·TodoPanel plan 挂载。app.tsx @ts-nocheck 现状照守不扩债。
+- 单测 `test/tui-acp.test.ts` +8：假子进程注入（node -e responder·不 spawn 真 dsh）roundtrip/端到端 new→chunk 流→tool_call→settle blocks 序（含流中 pending 断言·FAKE_STREAM_DELAY_MS 分批流送）/硬超时/exit 清 pending/lifecycle resume 编排（stderr CALL 序）/映射全类型/D-46 debug 零内容面/横幅混流。全量 757/757 绿（零既有破）。
+- 段 2 候窗（非本段）：真 dsh 联调+渲染走查（非作者手测+UI 交付渲染验证门）+部署面（Windows dsh 装机/凭据装载）。
+
 ## Sources
 
 - `../../src/runtime/`
