@@ -68,7 +68,7 @@ Options:
 }
 
 // ── Argument parsing ──
-function parseArgs(args: string[]): { command: string; port: number; serviceName: string; displayName: string; agent?: string; resume?: string; listSessions?: boolean; permissionMode?: string; allowRules?: string[]; denyRules?: string[]; addDirs?: string[]; printMode?: boolean; acp?: boolean } {
+export function parseArgs(args: string[]): { command: string; port: number; serviceName: string; displayName: string; agent?: string; resume?: string; listSessions?: boolean; permissionMode?: string; allowRules?: string[]; denyRules?: string[]; addDirs?: string[]; printMode?: boolean; acp?: boolean } {
   const command = args[0] ?? 'help';
   let port = DEFAULT_PORT;
   let serviceName = DEFAULT_SERVICE_NAME;
@@ -478,6 +478,13 @@ async function cmdRun(port: number, permissionMode?: string, allowRules?: string
 // ── TUI Chat command ──
 
 async function cmdChat(port: number, agent?: string, resume?: string, permissionMode?: string, allowRules?: string[], denyRules?: string[], addDirs?: string[], printMode?: boolean, acp?: boolean): Promise<void> {
+  // D' 段 2 (观察项收口): --acp = dsh 子进程直连面 —— daemon ensure 链 (Step1-4) /
+  // notifications (4.5) / daemon resume (Step5) / init 流程全跳, ACP 后端零 daemon
+  // 依赖 (useAcpSession 生命周期自管: list→resume/new→close)。TUI 启动段两面共享。
+  if (acp) {
+    await startChatTui(agent, [], undefined, true);
+  }
+
   // Step 1: healthz check
   const health = await healthCheck(port);
 
@@ -589,7 +596,18 @@ async function cmdChat(port: number, agent?: string, resume?: string, permission
     }
   }
 
-  // Step 6: start TUI
+  // Step 6: start TUI (提炼面 D' 段 2 —— daemon 面尾部与 --acp early 面共享)
+  await startChatTui(agent, notificationMessages, resumeOpts, acp === true);
+}
+
+/** TUI 启动段提炼 (D' 段 2 观察项收口): cmdChat 尾部与 --acp early 面共享;
+ *  末尾 process.exit 不返回。 */
+async function startChatTui(
+  agent: string | undefined,
+  notificationMessages: Array<{ role: 'assistant'; content: string }>,
+  resumeOpts: { sessionId?: string; messages?: Array<{ role: 'user' | 'assistant'; content: string }>; systemPrompt?: string } | undefined,
+  acp: boolean,
+): Promise<void> {
   if (agent) console.log(`[trilc] agent: ${agent}`);
   try {
     const { startTUI } = await import('./tui/render.js');
