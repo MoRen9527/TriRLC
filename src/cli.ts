@@ -596,8 +596,10 @@ async function cmdChat(port: number, agent?: string, resume?: string, permission
     }
   }
 
-  // Step 6: start TUI (提炼面 D' 段 2 —— daemon 面尾部与 --acp early 面共享)
-  await startChatTui(agent, notificationMessages, resumeOpts, acp === true);
+  // Step 6: start TUI (提炼面 D' 段 2 —— daemon 面尾部与 --acp early 面共享;
+  // 此处 acp 经 early return 窄化必为 false/undefined, Boolean() 防 TS2367 且
+  // 对未来路径变更保持防御)
+  await startChatTui(agent, notificationMessages, resumeOpts, Boolean(acp));
 }
 
 /** TUI 启动段提炼 (D' 段 2 观察项收口): cmdChat 尾部与 --acp early 面共享;
