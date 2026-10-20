@@ -62,11 +62,13 @@ Options:
   --allow <rule>        Allow a tool (repeatable). Format: \"ToolName\" or \"ToolName(content)\"
   --deny <rule>         Deny a tool (repeatable). Format: \"ToolName\" or \"ToolName(content)\"
   --add-dir <path>      Additional allowed directory (repeatable, e.g. sibling repos)
-  -p, --print           Non-interactive print mode: ask→deny, no TUI, requires --allow/--deny`);
+  -p, --print           Non-interactive print mode: ask→deny, no TUI, requires --allow/--deny
+  --acp                 TUI backend: ACP subprocess face (dsh --profile acp) instead of
+                        daemon Anthropic face; session resume managed by dsh (ignores --resume)`);
 }
 
 // ── Argument parsing ──
-function parseArgs(args: string[]): { command: string; port: number; serviceName: string; displayName: string; agent?: string; resume?: string; listSessions?: boolean; permissionMode?: string; allowRules?: string[]; denyRules?: string[]; addDirs?: string[]; printMode?: boolean } {
+function parseArgs(args: string[]): { command: string; port: number; serviceName: string; displayName: string; agent?: string; resume?: string; listSessions?: boolean; permissionMode?: string; allowRules?: string[]; denyRules?: string[]; addDirs?: string[]; printMode?: boolean; acp?: boolean } {
   const command = args[0] ?? 'help';
   let port = DEFAULT_PORT;
   let serviceName = DEFAULT_SERVICE_NAME;
@@ -75,6 +77,7 @@ function parseArgs(args: string[]): { command: string; port: number; serviceName
   let resume: string | undefined;
   let listSessions = false;
   let permissionMode: string | undefined;
+  let acp = false;
   const allowRules: string[] = [];
   const denyRules: string[] = [];
   const addDirs: string[] = [];
@@ -112,6 +115,11 @@ function parseArgs(args: string[]): { command: string; port: number; serviceName
       printMode = true;
     } else if (args[i] === '--list-sessions') {
       listSessions = true;
+    } else if (args[i] === '--acp') {
+      // D' 段 1: TUI 后端切 ACP 子进程面 (dsh --profile acp) —— 纯新增分支,
+      // 缺省 useChat (daemon 8711 Anthropic 面) 不动。ACP 面段落 resume 由
+      // dsh session/list 自管, --resume 与 --acp 并给时以 ACP 自管为准。
+      acp = true;
     }
   }
 
@@ -135,7 +143,7 @@ function parseArgs(args: string[]): { command: string; port: number; serviceName
     process.exit(1);
   }
 
-  return { command, port, serviceName, displayName, agent, resume, listSessions, permissionMode, allowRules, denyRules, addDirs, printMode };
+  return { command, port, serviceName, displayName, agent, resume, listSessions, permissionMode, allowRules, denyRules, addDirs, printMode, acp };
 }
 
 // ── Process identity (REQ-018) ──
@@ -469,7 +477,7 @@ async function cmdRun(port: number, permissionMode?: string, allowRules?: string
 
 // ── TUI Chat command ──
 
-async function cmdChat(port: number, agent?: string, resume?: string, permissionMode?: string, allowRules?: string[], denyRules?: string[], addDirs?: string[], printMode?: boolean): Promise<void> {
+async function cmdChat(port: number, agent?: string, resume?: string, permissionMode?: string, allowRules?: string[], denyRules?: string[], addDirs?: string[], printMode?: boolean, acp?: boolean): Promise<void> {
   // Step 1: healthz check
   const health = await healthCheck(port);
 
@@ -590,7 +598,11 @@ async function cmdChat(port: number, agent?: string, resume?: string, permission
     const opts = resumeOpts
       ? { ...resumeOpts, messages: [...notificationMessages, ...(resumeOpts.messages ?? [])] }
       : { messages: notificationMessages };
-    const root = await startTUI(opts);
+    // D' 段 1: 后端选择点 (架构稿裁决②) —— --acp 切 useAcpSession, 缺省
+    // useChat 不动 (现役链路零回归); ACP 面段落 resume 由 dsh 自管, daemon
+    // resumeOpts 只在 daemon 面生效。
+    const startOpts = acp ? { ...opts, backend: 'acp' as const } : opts;
+    const root = await startTUI(startOpts);
     await root.waitUntilExit();
       // 2026-08-16 CEO UX：/exit 花屏——退出时 ANSI 清屏 + 光标复位（Ink 残留边框清理）
       process.stdout.write('[2J[H[0J');
@@ -1360,7 +1372,7 @@ async function runModelCommand(restArgs: string[], port: number): Promise<void> 
 }
 
 // ── Entry ──
-const { command, port, serviceName, displayName, agent, resume, listSessions, permissionMode, allowRules, denyRules, addDirs, printMode } = parseArgs(process.argv.slice(2));
+const { command, port, serviceName, displayName, agent, resume, listSessions, permissionMode, allowRules, denyRules, addDirs, printMode, acp } = parseArgs(process.argv.slice(2));
 
 (async () => {
   // 正名过渡期（范围④）：旧名调用→单行弃用引导（stderr，不阻塞），随后照常执行。
@@ -1393,7 +1405,7 @@ const { command, port, serviceName, displayName, agent, resume, listSessions, pe
       await cmdRun(port, permissionMode, allowRules, denyRules, addDirs, printMode);
       break;
     case 'chat':
-      await cmdChat(port, agent, resume, permissionMode, allowRules, denyRules, addDirs, printMode);
+      await cmdChat(port, agent, resume, permissionMode, allowRules, denyRules, addDirs, printMode, acp);
       break;
     case 'company': {
       // REQ-017: debug reset — wipe company state + workspace skeleton for re-onboarding

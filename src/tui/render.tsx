@@ -22,6 +22,9 @@ export interface TUIResumeOptions {
   messages?: Array<{ role: 'user' | 'assistant'; content: string }>;
   // REQ-013: onboarding persona etc. — carried on auto-resume (cli.ts)
   systemPrompt?: string;
+  // D' 段 1 (架构稿裁决②): 'acp' → useAcpSession (dsh --profile acp 子进程面);
+  // 缺省 'daemon' → useChat (8711 Anthropic 面, 现役链路不动)。
+  backend?: 'daemon' | 'acp';
 }
 
 export async function startTUI(resume?: TUIResumeOptions): Promise<{ unmount: () => void; waitUntilExit: () => Promise<void> }> {
@@ -80,7 +83,7 @@ export async function startTUI(resume?: TUIResumeOptions): Promise<{ unmount: ()
     : process.stdin;
 
   const appElement = React.createElement(ThemeProvider, null,
-    React.createElement(App, { onAbortRef: abortRef, onCtrlCRef: ctrlCRef, resume })
+    React.createElement(App, { onAbortRef: abortRef, onCtrlCRef: ctrlCRef, resume, backend: resume?.backend })
   );
 
   // Wrap with InputContext when using CC input pipeline

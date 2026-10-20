@@ -11,11 +11,13 @@ import stringWidth from 'string-width';
 // P10: CC terminal input layer replaces npm ink useInput
 import { useInput } from './hooks/useTerminalInput.js';
 import { useChat } from './hooks/useChat.js';
+import { useAcpSession } from './hooks/useAcpSession.js';
 import { useCursorInput } from './hooks/useCursorInput.js';
 import { useDoublePress } from './hooks/useDoublePress.js';
 import { usePendingInteraction } from './hooks/usePendingInteraction.js';
 import Markdown from './components/Markdown.js';
 import ToolCallLine from './components/ToolCallLine.js';
+import TodoPanel from './components/TodoPanel.js';
 import StatusLine from './components/StatusLine.js';
 import ThinkingLine from './components/ThinkingLine.js';
 import ErrorMessage from './components/ErrorMessage.js';
@@ -97,8 +99,16 @@ function renderMessage(msg, verbose) {
         return React.createElement(UserMessage, { msg });
     return React.createElement(AssistantMessage, { msg, verbose });
 }
-export default function App({ onAbortRef, onCtrlCRef, resume }) {
-    const { messages, send, isLoading, requestState, error, abort, loadSession, clearMessages, addSystemMessage, inputTokens, outputTokens, model, setModel } = useChat();
+export default function App({ onAbortRef, onCtrlCRef, resume, backend }) {
+    // ── D' 段 1: 后端选择 (架构稿裁决②·--acp 纯新增分支) ──
+    // rules-of-hooks: 两 hook 恒序调用; enabled=false 时 useAcpSession 零
+    // spawn 零副作用 (惰性态), useChat 缺省链路一字不动。ACP 面段落 resume
+    // 由 dsh session/list 自管 (daemon resumeOpts 只在 daemon 面消费)。
+    const acpBackend = backend === 'acp';
+    const acp = useAcpSession({ enabled: acpBackend });
+    const daemonChat = useChat();
+    const active = acpBackend ? acp : daemonChat;
+    const { messages, send, isLoading, requestState, error, abort, loadSession, clearMessages, addSystemMessage, inputTokens, outputTokens, model, setModel } = active;
     const theme = useTheme();
     const [verbose, setVerbose] = useState(false);
     // ── P3: interactive prompts (AskUserQuestion / permission ask) ──
@@ -546,6 +556,11 @@ PR number: ${args.trim() || '(please list open PRs first)'}`;
             setResumeLoaded(true);
             return;
         }
+        // D' 段 1: ACP 面段落 resume 由 dsh 自管, daemon loadSession 防串跳过。
+        if (acpBackend) {
+            setResumeLoaded(true);
+            return;
+        }
         // REQ-013: whenever a sessionId exists, loadSession() must run —
         // it fetches the session's systemPrompt (onboarding persona) and
         // setSystemPrompt()s it into useChat. The display layer keeps using
@@ -607,7 +622,7 @@ PR number: ${args.trim() || '(please list open PRs first)'}`;
     // After each render, position the terminal's physical cursor at the input
     // caret so IME composition (CJK input) renders candidates inline.
     //
-    return React.createElement(Box, { flexDirection: "column", height: "100%" }, React.createElement(Box, { flexGrow: 1, flexDirection: "column" }, displayMsgs.length === 0 && !hasStreaming && React.createElement(Box, { paddingY: 1 }, React.createElement(Text, { color: theme.info, bold: true }, "TriCade v0.4.0"), React.createElement(Text, { dimColor: true }, resume ? "Session: " + (resume.sessionId ?? '(loaded)') + " — Type and Enter. /exit to quit." : "Type and Enter. /exit to quit. Ctrl+C twice.")), resumeMsgs.length > 0 && messages.length === 0 && React.createElement(Box, { paddingY: 0 }, React.createElement(Text, { dimColor: true }, "── Resumed " + resumeMsgs.length + " messages ──")), ...messageElements, requestState === 'waitingForFirstToken' && React.createElement(Text, { dimColor: true }, "Thinking..."), error && React.createElement(ErrorMessage, { message: error })), pending
+    return React.createElement(Box, { flexDirection: "column", height: "100%" }, React.createElement(Box, { flexGrow: 1, flexDirection: "column" }, displayMsgs.length === 0 && !hasStreaming && React.createElement(Box, { paddingY: 1 }, React.createElement(Text, { color: theme.info, bold: true }, "TriCade v0.4.0"), React.createElement(Text, { dimColor: true }, resume ? "Session: " + (resume.sessionId ?? '(loaded)') + " — Type and Enter. /exit to quit." : "Type and Enter. /exit to quit. Ctrl+C twice.")), resumeMsgs.length > 0 && messages.length === 0 && React.createElement(Box, { paddingY: 0 }, React.createElement(Text, { dimColor: true }, "── Resumed " + resumeMsgs.length + " messages ──")), acpBackend && acp.todos.length > 0 && React.createElement(TodoPanel, { tasks: acp.todos, title: "Plan" }), ...messageElements, requestState === 'waitingForFirstToken' && React.createElement(Text, { dimColor: true }, "Thinking..."), error && React.createElement(ErrorMessage, { message: error })), pending
         ? React.createElement(InteractionPrompt, {
             interaction: pending,
             questionIndex,
