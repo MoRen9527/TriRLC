@@ -284,6 +284,16 @@
 - 勘定谱漏网教训（如实记）：credentials store 在 `/home/fleet/.dsh/.credentials.yaml`（fleet 用户家点文件）——初勘全程对 /root/.dsh（root 家）=用户位错位，find 字面 glob 不现点文件形；「600」语义=dsh credentials service（web Models page 写入）。
 - 段 2b 候窗：tmux 渲染走查（trirlc chat --acp 首启+一问一答+退出重进 resume 链·非作者手测+UI 交付渲染验证门）。
 
+### TUI ACP 子进程面·段 2 收口（2026-10-20，走查卷 cto-dprime-seg2-acceptance-walkthrough-20261020）
+
+- **2b 走查四步全绿（CTO 本席操作·非作者手测·河源 worktree /tmp/tui-walk-1020 @813d19c）**：①首启 --acp 活体+零 daemon 日志（early return 生效活体证）②一问一答 walk2-ok settle+ctx 累计③/exit 进程收净=0④重进 resume 上下文保持实证（前答 walk2-ok 回读）。UI 交付渲染验证门齐（jsdom 单测+四断言真链路+非作者手测三面）。
+- **观 A 定性（FSD 复看）**：重进首屏标题行 capture 粘字（「Typetand%Enter」形）=tmux capture-pane 撞 ink 交替重绘帧差的静态拍伪影——活体肉眼面不可见+功能断言独立绿=零缺陷零行动（假读数家族 capture 面旁证+1）。
+- **观 B（设计内·候 CPO 轻评估）**：resume 后 StatusLine ctx/tokens 从零累计——usage_update 会话内数据源·resume 不重放旧 update（P0' 契约）。
+- **走查环境形**：npm ci 142 包+@trimetaverse/tricode 符号链接→/srv/fleet/TriCode（workspace 链接复刻·fleet TriRLC 无 node_modules 实锚）+走查隔离 HOME /tmp/tui-walk-home（凭据 cp 不 cat·毕清 CRED-REMOVED）。
+- **--help 缺口（新观察项候窗）**：parseArgs 无 --help 特判，`chat --help` 直入 cmdChat 主链触发 daemon auto-start（FSD 冒烟误触·timeout 兜住零残留·现役零触碰）——候窗补特判+走查冒烟禁 chat 子命令裸跑。
+- **清理面（CTO 手清+FSD 联调清双兑现）**：/tmp/acp-lt-1020+/tmp/tui-walk-home 全树删+find .credentials.yaml 零命中；worktree 断链（safe.directory 单次豁免）；现役 store 原位两轮断言；8791 web/8711 daemon 零触碰。
+- 段 2 全链交付锚：5586fb3（代码）→01ccd41（段 2a registry）→344fbd7+813d19c（STE 观察项加固）→本条（2b 收口）。github 通道断连窗挂账（TriRLC/TriMetaverse 双仓候自愈补推）。
+
 ## Sources
 
 - `../../src/runtime/`
