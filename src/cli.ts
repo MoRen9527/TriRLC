@@ -482,7 +482,7 @@ async function cmdChat(port: number, agent?: string, resume?: string, permission
   // notifications (4.5) / daemon resume (Step5) / init 流程全跳, ACP 后端零 daemon
   // 依赖 (useAcpSession 生命周期自管: list→resume/new→close)。TUI 启动段两面共享。
   if (acp) {
-    await startChatTui(agent, [], undefined, true);
+    return await startChatTui(agent, [], undefined, true);
   }
 
   // Step 1: healthz check
