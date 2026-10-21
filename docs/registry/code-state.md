@@ -294,6 +294,14 @@
 - **清理面（CTO 手清+FSD 联调清双兑现）**：/tmp/acp-lt-1020+/tmp/tui-walk-home 全树删+find .credentials.yaml 零命中；worktree 断链（safe.directory 单次豁免）；现役 store 原位两轮断言；8791 web/8711 daemon 零触碰。
 - 段 2 全链交付锚：5586fb3（代码）→01ccd41（段 2a registry）→344fbd7+813d19c（STE 观察项加固）→本条（2b 收口）。github 通道断连窗挂账（TriRLC/TriMetaverse 双仓候自愈补推）。
 
+### Windows 装机窗收口（2026-10-21，commit 07549a5·SDE·CTO 追认 APPROVE）
+
+- **spawn 适配（07549a5·2 files +8/-2）**：Node22 CVE-2024-27980 缓解下无 shell spawn 拒 .cmd（npm shim）+CreateProcess 不补 PATHEXT（裸名 ENOENT）——`AcpClientOptions.shell` 选项化：缺省 `process.platform === 'win32'`（经 cmd /c 解析 shim·args 常量形无注入面）·POSIX false 零行为变化·单测构造点显式注入 false 保持假子进程注入原形。门禁：tsc 0 红+ACP 组 9/9+全量 758/758 零回归。
+- **dsh@0.2.0-rc.2 Windows 装机毕**（preview 版本钉住·latest 未验证不取）：全局 npm 装+凭据装载（ssh cat 流式拉取·值面零回显·icacls 收敛仅本用户）+真模型探针 create 双轮 settle end_turn（凭据装载生效实锚）。
+- **TUI 四态复验全绿（ConPTY 编程驱动形·@lydell/node-pty --no-save 临时件毕删）**：①首启活体+8711 uptime 无重置（early return 活体证）②一问一答 settle+ctx 递增③/exit PTY-EXIT 0+进程零残留④重进 resume 前答回读。毕报卷=TriMetaverse W43 `sde-dprime-windows-install/reports/`（1af58bcc5）。
+- **观察项（候窗勘修·CTO 已列候窗清单）**：TUI 输入层 useTerminalInput/parse-keypress 链对 ConPTY 裸 CR 路径不触发 return（字节级探针 GOT "0d" 实证到达 app stdin）·kitty CSI u（ESC[13u）形正常——人工键盘形补测入勘修窗首项（自动化注入形未覆盖人工面如实标注）。
+- 联调探针河源布局注：`test/acp-lt-probe.mts` import 相对路径系河源 worktree 布局假设——本机跑需同目录临时拷贝形（ESM 拒盘符裸路径）。
+
 ## Sources
 
 - `../../src/runtime/`
