@@ -57,6 +57,7 @@ function makeClient(opts: Record<string, unknown> = {}, env: Record<string, stri
     command: process.execPath,
     args: ['-e', RESPONDER],
     requestTimeoutMs: 5000,
+    shell: false,
     ...opts,
     // env 注入走 spawn 环境 (AcpClient 未透出 env 缝 → 用 process.env 快照)。
   }) as AcpClient;
@@ -303,7 +304,7 @@ test('d46: debug lines carry only method/update type, zero content', async () =>
 // ── t8: 非 JSON 行静默忽略 (横幅混流防护) ──
 test('frame layer: non-json stdout lines are ignored silently', async () => {
   const bannerResponder = `process.stdout.write('BANNER LINE\\n'); process.stdout.write(JSON.stringify({jsonrpc:'2.0',method:'session/update',params:{sessionId:'s',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'x'}}}}) + '\\n'); setTimeout(() => process.exit(0), 100);`;
-  const client = new AcpClient({ command: process.execPath, args: ['-e', bannerResponder] });
+  const client = new AcpClient({ command: process.execPath, args: ['-e', bannerResponder], shell: false });
   let got: unknown = null;
   client.onNotification(({ update }) => { got = update; });
   client.start();

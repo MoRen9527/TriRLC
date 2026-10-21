@@ -44,6 +44,8 @@ export interface AcpClientOptions {
   promptTimeoutMs?: number;
   /** D-46 debug 观察面: 只应记 method/sessionId/update 类型。 */
   debug?: (line: string) => void;
+  /** Windows 缺省 true（npm shim=.cmd·Node22 无 shell spawn 拒——经 cmd /c 解析）; 测试注入形传 false。 */
+  shell?: boolean;
 }
 
 interface PendingEntry {
@@ -90,6 +92,7 @@ export class AcpClient {
   readonly cwd: string;
   private readonly requestTimeoutMs: number;
   private readonly promptTimeoutMs: number;
+  private readonly shell: boolean;
   private readonly debug: (line: string) => void;
 
   constructor(opts: AcpClientOptions = {}) {
@@ -98,6 +101,7 @@ export class AcpClient {
     this.cwd = opts.cwd ?? process.cwd();
     this.requestTimeoutMs = opts.requestTimeoutMs ?? ACP_DEFAULT_TIMEOUT_MS;
     this.promptTimeoutMs = opts.promptTimeoutMs ?? ACP_PROMPT_TIMEOUT_MS;
+    this.shell = opts.shell ?? process.platform === 'win32';
     this.debug = opts.debug ?? (() => {});
   }
 
@@ -123,7 +127,8 @@ export class AcpClient {
     if (this.child) throw new AcpClientError('already started', 'protocol');
     let child: ChildProcessWithoutNullStreams;
     try {
-      child = spawn(this.command, this.args, { cwd: this.cwd, stdio: ['pipe', 'pipe', 'pipe'] });
+      // Windows: npm shim 是 .cmd——Node22 无 shell spawn 拒 .cmd（CVE-2024-27980）——缺省经 cmd /c 解析 shim（args 常量形无注入面·POSIX/测试注入形 shell=false 零行为变化）
+      child = spawn(this.command, this.args, { cwd: this.cwd, stdio: ['pipe', 'pipe', 'pipe'], shell: this.shell });
     } catch (err) {
       throw new AcpClientError(`spawn failed: ${(err as Error).message}`, 'spawn');
     }
