@@ -122,22 +122,26 @@ function resolveFromWorkspace(): string {
 /**
  * Resolve TriRLC version from:
  *  1. TRILC_VERSION env var (explicit override)
- *  2. version.json at the TriRLC root (relative to this module)
- *  3. Hardcoded fallback '1.0.0'
+ *  2. package.json at the TriRLC root (single source of truth — VER-20260806-002)
+ *  3. Hardcoded fallback '0.0.0' (sentinel: version not found)
+ *
+ * VER-20260806-002 (2026-10-23): version.json 已废止（手写冻结快照致双源分歧，
+ * 与 update-check.ts readLocalVersion 链不一致=漂移根）——package.json 唯一真源。
+ * 勘定卷: TriMetaverse docs/workflow/operating-records/2026-W43/trees/ver002-version-source/
  *
  * Path derivation: this module compiles to dist/config/env.js,
- * so ../../version.json resolves to <trilc-root>/version.json for
+ * so ../../package.json resolves to <trilc-root>/package.json for
  * both dev workspaces and ZIP/MSI deployments.
  */
 function resolveVersion(): string {
   if (process.env.TRILC_VERSION) return process.env.TRILC_VERSION;
 
   const scriptDir = dirname(fileURLToPath(import.meta.url));
-  const versionPath = resolve(scriptDir, '..', '..', 'version.json');
+  const pkgPath = resolve(scriptDir, '..', '..', 'package.json');
 
-  if (existsSync(versionPath)) {
+  if (existsSync(pkgPath)) {
     try {
-      const raw = readFileSync(versionPath, 'utf-8');
+      const raw = readFileSync(pkgPath, 'utf-8');
       // BOM 容错：Windows PowerShell 5.1 的 Set-Content -Encoding UTF8 会写 BOM，
       // JSON.parse 对 BOM 开头抛错（BUG-20260805-002 掩盖链的一环）
       const parsed = JSON.parse(raw.replace(/^﻿/, ''));
@@ -147,7 +151,7 @@ function resolveVersion(): string {
     } catch { /* ignore parse errors, fall through */ }
   }
 
-  return '1.0.0';
+  return '0.0.0';
 }
 
 export function readEnv(): TriRLCEnv {

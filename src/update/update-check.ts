@@ -1,6 +1,6 @@
 // ── TriCade Auto-Update Check (Phase 3 pipe3-1) ──
 // Periodically checks GitHub Releases for a newer TriRLC version.
-// Compares local version.json vs the latest GitHub Release tag.
+// Compares local version (package.json — VER-20260806-002) vs the latest GitHub Release tag.
 // Exposes /internal/v1/update/check as an HTTP GET endpoint.
 // TriPilot can optionally consume this endpoint to show update notifications.
 
@@ -27,7 +27,7 @@ export interface UpdateInfo {
   /** Error message if the check failed (null on success). */
   error: string | null;
   /** How the current version was resolved. */
-  versionSource: 'version.json' | 'package.json' | 'env';
+  versionSource: 'package.json' | 'env';
 }
 
 export interface UpdateCheckOptions {
@@ -37,9 +37,7 @@ export interface UpdateCheckOptions {
   githubApiUrl?: string;
   /** GitHub personal access token (avoids rate limiting). */
   githubToken?: string;
-  /** Path to local version.json. Auto-detected if not provided. */
-  versionJsonPath?: string;
-  /** Path to local package.json (fallback). Auto-detected if not provided. */
+  /** Path to local package.json. Auto-detected if not provided. */
   packageJsonPath?: string;
   /** How often to check for updates in milliseconds. Default: 24h. */
   checkIntervalMs?: number;
@@ -59,18 +57,9 @@ function detectTriLcRoot(): string {
 }
 
 function readLocalVersion(opts?: UpdateCheckOptions): { version: string; source: UpdateInfo['versionSource'] } {
-  const versionJsonPath = opts?.versionJsonPath ?? resolve(detectTriLcRoot(), 'version.json');
-  if (existsSync(versionJsonPath)) {
-    try {
-      const raw = readFileSync(versionJsonPath, 'utf-8');
-      const parsed = JSON.parse(raw) as { version?: string; tricadeVersion?: string };
-      const v = parsed.tricadeVersion ?? parsed.version;
-      if (v) return { version: v, source: 'version.json' };
-    } catch {
-      // fall through
-    }
-  }
-
+  // VER-20260806-002 (2026-10-23): version.json 已从版本链除名（手写冻结快照致双源分歧·
+  // 旧部署包残留该文件时会造成歧义真源）——package.json 唯一真源。
+  // 勘定卷: TriMetaverse docs/workflow/operating-records/2026-W43/trees/ver002-version-source/
   const pkgJsonPath = opts?.packageJsonPath ?? resolve(detectTriLcRoot(), 'package.json');
   if (existsSync(pkgJsonPath)) {
     try {

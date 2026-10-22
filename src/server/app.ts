@@ -4443,7 +4443,7 @@ export function createTriRLCApp(env: TriRLCEnv) {
         }
 
         // ── GET /internal/v1/update/check ──
-        // ACT2: Returns update information comparing local version.json
+        // ACT2: Returns update information comparing local version (package.json — VER-20260806-002)
         // against the latest GitHub Release. TriPilot consumes this to show
         // update notifications. Query: ?force=true to bypass cache.
         if (req.url?.startsWith('/internal/v1/update/check') && req.method === 'GET') {
