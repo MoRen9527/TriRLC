@@ -98,6 +98,20 @@ export function registerReadTool(): void {
           });
         }
 
+        // REGR-20261020-001: offset beyond EOF must return an explicit EOF
+        // notice. The old clamp (Math.min(offset, totalLines)) silently
+        // returned the LAST line for beyond-EOF requests — misleading content
+        // that looked like a normal read starting at the last line.
+        if (offset > totalLines) {
+          return JSON.stringify({
+            file_path: filePath,
+            content: `<system-reminder>EOF: file has ${totalLines} lines (requested start line ${offset} is beyond EOF).</system-reminder>`,
+            num_lines: 0,
+            start_line: offset,
+            total_lines: totalLines,
+          });
+        }
+
         const startLine = Math.max(1, Math.min(offset, totalLines));
         const startIdx = startLine - 1;
         const maxRead = limit ?? MAX_LINES;
