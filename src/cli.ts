@@ -612,7 +612,7 @@ async function startChatTui(
 ): Promise<void> {
   if (agent) console.log(`[trilc] agent: ${agent}`);
   try {
-    const { startTUI } = await import('./tui/render.js');
+    const { startTUI } = await import('@trimetaverse/tricode/r-ink-tui/render.js');
     // REQ-021: pass notifications as initial assistant messages (clean terminal,
     // no console.log before Ink's first paint)
     const opts = resumeOpts
