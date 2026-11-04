@@ -2,7 +2,7 @@
   "name": "trirlc",
   "version": "0.9.1",
   "private": true,
-  "description": "TriMetaverse Local Controller",
+  "description": "TriMetaverse R-plane Local Controller",
   "type": "module",
   "bin": {
     "trirlc": "./dist/cli.js",
