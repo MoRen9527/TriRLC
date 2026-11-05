@@ -19,33 +19,67 @@
 // receipts.deliver 收敛 sent→readTracker.markDelivered（dropped 零 mark·Later/
 // 异常冒泡零 mark——未送达不标已读）。settled 段挂接=票末收敛（settleTicket
 // 批量 API 位落·N4 票域生命周期面接——裁定④谱位确认）。
+//
+// N4 并入（票域 Tickets/Assignments+Policy 最小门·设计卷 eea70d9c6/948171ee0）：
+// 组合序扩（依赖单向零环形·判定书三.1）：…→ReadTracker→Policy→TicketRepo→
+// Tickets→Assignments（持 tickets 回引=report→end 联动·Assignments→Tickets
+// 单向）。closingFlag holder 形（判定书三.1）：票域持 holder 注入·不回指
+// Engine——closing getter 引 holder·stop() 置 holder；票域 mutation 入口自感。
+// reply handler（判定书②附注 transport 施工定谳形）：open 注入 transport 时
+// 注册 effects.handle('reply')→deliverAndTrack（closing 检查移 handler 面=
+// deliverAndTrack 自感 closingFlag）；缺省不注册=行留库候消费（β 组合零改）。
 
 import { acquireDirectoryLock, LockHeldError, type DirectoryLock } from './lock.js';
 import { V2Store } from './store.js';
 import { Effects } from './effects.js';
 import { ReadTracker } from './read-tracker.js';
 import { ReceiptsStore, type ReceiptTransport } from './receipts.js';
+import { Policy } from './policy.js';
+import { TicketRepo, Tickets, Assignments, type ClosingFlag } from './tickets.js';
 
 export { LockHeldError };
 export type { DirectoryLock };
+export type { ClosingFlag };
 
 export class Engine {
   readonly store: V2Store;
   readonly effects: Effects;
   readonly readTracker: ReadTracker;
   readonly receipts: ReceiptsStore;
+  readonly policy: Policy;
+  readonly tickets: Tickets;
+  readonly assignments: Assignments;
 
-  private closing = false;
+  /** 停机旗 holder（判定书三.1 注入形·票域持此不回指 Engine=零环形）。 */
+  readonly closingFlag: ClosingFlag = { closing: false };
+
+  /** 票域表仓储（读面公开=测试/嫁接消费面·mutation 面=Tickets/Assignments 收口）。 */
+  readonly ticketRepo: TicketRepo;
+
+  private get closing(): boolean {
+    return this.closingFlag.closing;
+  }
 
   private constructor(store: V2Store, private readonly lock: DirectoryLock) {
     this.store = store;
     this.effects = new Effects(store.db); // 先建：effect 表 DDL（receipts behind 联查依赖）
     this.receipts = new ReceiptsStore(store.db, this.effects);
     this.readTracker = new ReadTracker(store.db);
+    this.policy = new Policy();
+    this.ticketRepo = new TicketRepo(store.db);
+    this.tickets = new Tickets(
+      { store, effects: this.effects, readTracker: this.readTracker, policy: this.policy, closingFlag: this.closingFlag },
+      this.ticketRepo,
+    );
+    this.assignments = new Assignments(
+      { store, effects: this.effects, readTracker: this.readTracker, policy: this.policy, closingFlag: this.closingFlag },
+      this.ticketRepo,
+      this.tickets,
+    );
   }
 
-  /** 组合根入口：锁→库→三件→start。活锁=LockHeldError（入口面捕获→非零 exit）。 */
-  static open(stateDir: string): Engine {
+  /** 组合根入口：锁→库→七件→（transport 注入时注册 reply handler）→start。 */
+  static open(stateDir: string, options?: { transport?: ReceiptTransport }): Engine {
     const lock = acquireDirectoryLock(stateDir);
     let store: V2Store;
     try {
@@ -62,6 +96,11 @@ export class Engine {
       lock.release();
       throw error;
     }
+    if (options?.transport !== undefined) {
+      // reply 效果行消费链（closing 检查移 handler 面=deliverAndTrack 自感 flag）。
+      const transport = options.transport;
+      engine.effects.handle('reply', (_payload, key) => engine.deliverAndTrack(key, transport));
+    }
     engine.effects.start();
     return engine;
   }
@@ -72,7 +111,7 @@ export class Engine {
    * 异常）冒泡零 mark。id 未登记（receipt 缺）→deliver 静默 return→零 mark。
    */
   async deliverAndTrack(id: string, transport: ReceiptTransport): Promise<void> {
-    if (this.closing) throw new Error('The engine is closing');
+    if (this.closingFlag.closing) throw new Error('The engine is closing');
     await this.receipts.deliver(id, transport);
     if (this.receipts.get(id)?.status === 'sent') this.readTracker.markDelivered(id);
   }
@@ -82,10 +121,10 @@ export class Engine {
     for (const id of messageIds) this.readTracker.settle(id);
   }
 
-  /** 停机序：closing→drain→close→锁最后放。幂等（重入零副作用）。 */
+  /** 停机序：closing（holder 置位·票域同感）→drain→close→锁最后放。幂等。 */
   async stop(): Promise<void> {
-    if (this.closing) return;
-    this.closing = true;
+    if (this.closingFlag.closing) return;
+    this.closingFlag.closing = true;
     await this.effects.drain();
     this.store.close();
     this.lock.release();

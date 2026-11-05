@@ -9,7 +9,8 @@
 // 嫁接面）：SAVEPOINT v2_atomic_<depth> 计数栈——嵌套内层 RELEASE 不提交只剥栈
 // （SQLite SAVEPOINT 语义）·外层 RELEASE 才真提交。committed 回调分层队列：
 //   事务内注册（onCommitted）→回调挂队列·外层 RELEASE 后依注册序跑·回滚丢弃
-//   ·回调错误 report 不败事务（原型 committed 分层语义采）；
+//   ·回调错误 report 不败事务（原型 committed 分层语义采·report 面可注入=
+//   N4 判定书三.2 reporter 形·缺省 console.error=β 组合零改）；
 //   事务外注册→立即跑（无事务边界可等）。
 // afterCommit 与 Effects 分野（原型语义注释采）：即时内存跟随=直接改·跨 crash
 // 持久副作用=committed 回调。Effects kick=queueMicrotask（β-2 零改）——V2Store
@@ -23,11 +24,6 @@ import { join } from 'node:path';
 /** schema 版本（库格式契约·范围外拒开）。 */
 export const SCHEMA_VERSION = 1;
 
-/** committed 回调错误 report 面（不败事务·照原型 report 语义）。 */
-function reportCommittedError(error: unknown): void {
-  console.error('[v2] committed callback failed:', error);
-}
-
 export class V2Store {
   readonly db: DatabaseSync;
   readonly path: string;
@@ -37,7 +33,14 @@ export class V2Store {
   /** committed 分层队列：内层注册并入同一队列·外层 RELEASE 才跑（真提交面）。 */
   private committedQueue: Array<() => void> = [];
 
-  constructor(stateDir: string, dbName = 'v2.db') {
+  constructor(
+    stateDir: string,
+    dbName = 'v2.db',
+    /** committed 回调错误 report 注入（判定书三.2：缺省 console.error=β 零改·spy 可断言）。 */
+    private readonly onCommittedError: (error: unknown) => void = (error) => {
+      console.error('[v2] committed callback failed:', error);
+    },
+  ) {
     mkdirSync(stateDir, { recursive: true });
     this.path = join(stateDir, dbName);
     this.db = new DatabaseSync(this.path);
@@ -72,7 +75,7 @@ export class V2Store {
         const callbacks = this.committedQueue;
         this.committedQueue = [];
         for (const callback of callbacks) {
-          try { callback(); } catch (error) { reportCommittedError(error); }
+          try { callback(); } catch (error) { this.onCommittedError(error); }
         }
       }
       return value;
