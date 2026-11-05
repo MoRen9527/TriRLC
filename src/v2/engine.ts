@@ -33,7 +33,14 @@
 // 再扩：SettingsRepo→Policy（从持久 settings 构建·空行落 DEFAULT_SETTINGS
 // mode='off' 裁①）→…。applySettings=原子链：settings 写+policyEffects diff+
 // tickets.policyChanged 增量通知同事务（settings 变更与通知原子性）·事务毕
-// 换 Policy 实例（内存跟随面·失败回滚零换）。scope 注入=裁③缺省全收。
+// policy.rebind 换谱（holder 形·票域 deps 引用零破——失败回滚零换）。scope
+// 注入=裁③缺省全收。
+//
+// N6 并入（Seats registry 第六 Pick·设计卷 72edda33b §三·门①裁 2cfe40575）：
+// 组合序再扩：seedSeats（幂等灌 15 席种子·INSERT OR IGNORE 重开零冲已改）→
+// SeatRepo→Seats（engine.seats 公开·list=列席面/resolve=点名解析·N8 send
+// 消费面）。address 零拨号（本件只存不连）·status 静态裁⑧·name 值域=
+// source-agents 正名 kebab-case 裁⑦。
 
 import { acquireDirectoryLock, LockHeldError, type DirectoryLock } from './lock.js';
 import { V2Store } from './store.js';
@@ -46,6 +53,7 @@ import {
   type Settings, type ScopeResolver, type PolicyEffect,
 } from './policy.js';
 import { TicketRepo, Tickets, Assignments, type ClosingFlag } from './tickets.js';
+import { Seats, SeatRepo, seedSeats } from './seats.js';
 
 export { LockHeldError };
 export type { DirectoryLock };
@@ -59,6 +67,8 @@ export class Engine {
   readonly settingsRepo: SettingsRepo;
   /** Policy 实例（applySettings 域内换新——非 readonly 注：重建面收口本类）。 */
   policy: Policy;
+  /** N6 Seats registry（第六 Pick·组合序：seedSeats 幂等灌→Seats 公开）。 */
+  readonly seats: Seats;
   readonly tickets: Tickets;
   readonly assignments: Assignments;
 
@@ -79,6 +89,8 @@ export class Engine {
     this.readTracker = new ReadTracker(store.db);
     this.settingsRepo = new SettingsRepo(store.db);
     this.policy = new Policy(this.settingsRepo.get() ?? DEFAULT_SETTINGS, scope);
+    seedSeats(store.db);
+    this.seats = new Seats(new SeatRepo(store.db));
     this.ticketRepo = new TicketRepo(store.db);
     this.tickets = new Tickets(
       { store, effects: this.effects, readTracker: this.readTracker, policy: this.policy, closingFlag: this.closingFlag },
