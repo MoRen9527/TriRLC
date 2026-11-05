@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ReceiptsStore, Later, FAILURES_BEFORE_ERROR } from '../src/v2/receipts.js';
 import type { ReceiptTransport } from '../src/v2/receipts.js';
+import { Effects } from '../src/v2/effects.js'; // β-2 改形：effect 表 DDL/enqueue/cancel 归 Effects（构造序先于 ReceiptsStore）
 
 const TEST_DB = join(tmpdir(), `trirlc-test-v2-receipts-${process.pid}-${Date.now()}.db`);
 
@@ -21,11 +22,15 @@ function cleanup() {
   try { unlinkSync(TEST_DB + '-shm'); } catch { /* ok */ }
 }
 
+let db: DatabaseSync;
+let effects: Effects;
 let store: ReceiptsStore;
 
 beforeEach(() => {
   cleanup();
-  store = new ReceiptsStore(new DatabaseSync(TEST_DB));
+  db = new DatabaseSync(TEST_DB);
+  effects = new Effects(db);
+  store = new ReceiptsStore(db, effects);
 });
 afterEach(() => {
   store.close(); // 先关连接再 unlink——Windows 下未关连接致 unlink 静默失败→库复用污染（首轮实锚）
@@ -135,8 +140,8 @@ describe('β-1 receipts 事务回执', () => {
   it('enqueue coalesce：同 kind+key 双 enqueue→单行 generation+1 attempts 归零', () => {
     store.send(msg('ntf-j'));
     store.db.prepare("UPDATE effect SET attempts = 2, generation = 3 WHERE kind = 'reply' AND key = 'ntf-j'").run();
-    store.send(msg('ntf-j')); // add false（幂等）→不 enqueue——coalesce 面直测 enqueue
-    store.enqueue('reply', 'ntf-j', {});
+    store.send(msg('ntf-j')); // add false（幂等）→不 enqueue——coalesce 面直测 Effects.enqueue（β-2 迁入）
+    effects.enqueue('reply', 'ntf-j', {});
     const row = store.db.prepare("SELECT generation, attempts FROM effect WHERE kind = 'reply' AND key = 'ntf-j'").get() as { generation: number; attempts: number };
     assert.equal(row.generation, 4);
     assert.equal(row.attempts, 0);

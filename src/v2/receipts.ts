@@ -10,17 +10,17 @@
 // 防护（behind 联查·FAILURES_BEFORE_ERROR=3）③settle 竞态防护（WHERE pending
 // +重建防同 id 再排队）。DropReason 照 CTO 裁定=targetGone/targetIgnored。
 //
-// 退避参数（CTO 裁定 A）：delay = min(300_000, 2_000 * 2 ** min(attempts, 16))
-// ——β-2 Effects 完整类落 src/v2/effects.ts（本件 effect 表 DDL 与之一致·
-// dispatch/退避/health/死信出口=β-2 范围；本件只落 enqueue/cancel 最小面）。
+// β-2 改形（2026-11-05 准动令）：enqueue/cancel/effect 表 DDL/seq 计数自本件
+// 迁入 Effects 类（src/v2/effects.ts·持久退避队列正身）——本件改依赖注入形
+// constructor(db, effects)：send=atomic 内 add→effects.enqueue·withdraw=atomic
+// 内撤行→effects.cancel（照原型 outbox↔effects 宿主组合形）。Later/
+// FAILURES_BEFORE_ERROR 语义归属 effects.ts·此处 re-export 保 β-1 import 面。
 
 import type { DatabaseSync } from 'node:sqlite';
+import { Later, FAILURES_BEFORE_ERROR } from './effects.js';
+import type { Effects } from './effects.js';
 
-/** 「现在不能跑」信号：重排 initial delay 不计失败数（照原型 Later·β-2 Effects 消费）。 */
-export class Later extends Error {}
-
-/** 连续失败阈值（照原型 FAILURES_BEFORE_ERROR·与 behind 防护同源）。 */
-export const FAILURES_BEFORE_ERROR = 3;
+export { Later, FAILURES_BEFORE_ERROR };
 
 /** 永久不可达（照原型 channelGone→席语境改名·CTO 裁定 5） */
 export type DropReason = 'targetGone' | 'targetIgnored';
@@ -54,8 +54,9 @@ export interface ReceiptTransport {
 
 /**
  * receipts 表生成列 `pending`=同目标乱序防护的排序键（照原型 outbox.pending
- * 复合 key=ticketId+' '+thread→v2 席语境=to 单字段）；effect 表 DDL 与 β-2
- * Effects 类一致（attempts 列=behind 联查依赖）。
+ * 复合 key=ticketId+' '+thread→v2 席语境=to 单字段）；effect 表 DDL 归
+ * Effects 类（src/v2/effects.ts——behind 联查依赖其 attempts 列·构造序须
+ * Effects 先于本件）。
  */
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS receipts (
@@ -65,29 +66,19 @@ CREATE TABLE IF NOT EXISTS receipts (
     AND json_extract(value, '$.to') IS NOT NULL THEN json_extract(value, '$.to') END)
 );
 CREATE INDEX IF NOT EXISTS receipts_pending ON receipts(pending) WHERE pending IS NOT NULL;
-CREATE TABLE IF NOT EXISTS effect (
-  kind TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, seq INTEGER NOT NULL,
-  generation INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0,
-  error TEXT NOT NULL DEFAULT '', due INTEGER NOT NULL, since TEXT NOT NULL,
-  PRIMARY KEY (kind, key)
-);
-CREATE INDEX IF NOT EXISTS effect_due ON effect(kind, due, seq);
 `;
 
 /**
  * β-1 事务回执最小件：receipts 持久+reply effect 入队原子+withdraw/behind/
- * settle 三缺补位。send=store.atomic 内 add→enqueue（照原型 outbox.send·
+ * settle 三缺补位。send=atomic 内 add→effects.enqueue（照原型 outbox.send·
  * 幂等：add false=重复 id 零重复入队）。
  */
 export class ReceiptsStore {
   readonly db: DatabaseSync;
-  private seq: number;
 
-  constructor(db: DatabaseSync) {
+  constructor(db: DatabaseSync, private readonly effects: Pick<Effects, 'enqueue' | 'cancel'>) {
     this.db = db;
     this.db.exec(SCHEMA);
-    const row = this.db.prepare('SELECT IFNULL(MAX(seq), 0) AS seq FROM effect').get() as { seq: number | bigint } | undefined;
-    this.seq = Number(row?.seq ?? 0);
   }
 
   /** 关库（照原型 store.close·停机序=先关库后放锁同族语义·测试面 afterEach 用）。 */
@@ -115,7 +106,7 @@ export class ReceiptsStore {
   /** 记录回执+入队投递原子（幂等：重复 id 保持原回执·零重复入队）。 */
   send(message: OutboundMessage): void {
     this.atomic(() => {
-      if (this.add(message)) this.enqueue('reply', message.id, {});
+      if (this.add(message)) this.effects.enqueue('reply', message.id, {});
     });
   }
 
@@ -176,32 +167,21 @@ export class ReceiptsStore {
       .run(JSON.stringify(settled), message.id);
   }
 
-  /** 撤回：只有 pending 态可撤（照原型 withdraw·返回是否撤成功）。 */
+  /** 撤回：只有 pending 态可撤·撤行+effect cancel 同事务（β-2 注入形·照原型 outbox.withdraw）。 */
   withdraw(id: string): boolean {
-    return Number(this.db.prepare("DELETE FROM receipts WHERE id = ? AND json_extract(value, '$.status') = 'pending'")
-      .run(id).changes) > 0;
-  }
-
-  // ── effect 最小面（β-2 完整 Effects 类扩展位：dispatch/指数退避/health/死信出口）──
-
-  /** 入队（kind+key 去重合并保队列位·generation 自增防运行中覆盖——照原型 enqueue）。 */
-  enqueue(kind: string, key: string, payload: unknown): void {
-    this.seq += 1;
-    this.db.prepare(`INSERT INTO effect (kind, key, value, seq, due, since) VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(kind, key) DO UPDATE SET value = excluded.value, generation = generation + 1,
-        attempts = 0, error = '', due = excluded.due`)
-      .run(kind, key, JSON.stringify(payload), this.seq, Date.now(), new Date().toISOString());
-  }
-
-  /** 撤待投行（照原型 cancel·运行中 attempt 由 β-2 完整类处理 generation 防护）。 */
-  cancel(kind: string, key: string): void {
-    this.db.prepare('DELETE FROM effect WHERE kind = ? AND key = ?').run(kind, key);
+    let removed = false;
+    this.atomic(() => {
+      removed = Number(this.db.prepare("DELETE FROM receipts WHERE id = ? AND json_extract(value, '$.status') = 'pending'")
+        .run(id).changes) > 0;
+      if (removed) this.effects.cancel('reply', id);
+    });
+    return removed;
   }
 
   /**
    * 投递单件（照原型 Outbox.deliver 序：pending 检查→enabled→behind 乱序
    * 防护→channelAllowed→send 三态收敛）。transport=注入形（shadow mock /
-   * 现役挂接实现候选）。Later 抛出=β-2 Effects 重排（免计数）消费面。
+   * 现役挂接实现候选）。Later 抛出=Effects 重排（免计数）消费面。
    */
   async deliver(id: string, transport: ReceiptTransport): Promise<void> {
     const receipt = this.get(id);
