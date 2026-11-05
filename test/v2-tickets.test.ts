@@ -18,7 +18,7 @@ import { V2Store } from '../src/v2/store.js';
 import { Effects } from '../src/v2/effects.js';
 import { ReadTracker } from '../src/v2/read-tracker.js';
 import { TicketRepo, Tickets, Assignments, canRetry, waitsForPerson, type ClosingFlag } from '../src/v2/tickets.js';
-import { Policy, type Mandate } from '../src/v2/policy.js';
+import { Policy, DEFAULT_SETTINGS, type Settings, type Mandate } from '../src/v2/policy.js';
 import { UserError } from '../src/v2/errors.js';
 
 const TEST_DIR = join(tmpdir(), `trirlc-test-v2-tickets-${process.pid}-${Date.now()}`);
@@ -51,12 +51,12 @@ interface Domain {
   assignments: Assignments;
 }
 
-/** 直组合形（零锁快面·组合序照 Engine 构造序=β 链测试组合即正形）。 */
-function buildDomain(onCommittedError?: (error: unknown) => void): Domain {
+/** 直组合形（零锁快面·组合序照 Engine 构造序=β 链测试组合即正形·N5 升形=Policy 从 settings 构建）。 */
+function buildDomain(onCommittedError?: (error: unknown) => void, settings: Settings = DEFAULT_SETTINGS): Domain {
   const store = new V2Store(TEST_DIR, 'v2.db', onCommittedError);
   const effects = new Effects(store.db);
   const tracker = new ReadTracker(store.db);
-  const policy = new Policy();
+  const policy = new Policy(settings);
   const repo = new TicketRepo(store.db);
   const flag: ClosingFlag = { closing: false };
   const tickets = new Tickets({ store, effects, readTracker: tracker, policy, closingFlag: flag }, repo);
@@ -258,14 +258,14 @@ describe('N4 report 校验谱+wake 复活门', () => {
     d.tickets.addInput(tidBot, { id: 'in-b', kind: 'text', at: t(2), text: 'x' });
     assert.throws(() => d.tickets.wake(tidBot, { id: 'tg-bot', human: false, at: t(3) }),
       (error: unknown) => error instanceof UserError && /Only a human/.test(error.message));
-    // paused 拒
-    const tidPaused = openTicket(d, 'tk-paused');
-    d.tickets.end(tidPaused, { by: 'executor', outcome: 'dropped', at: t(1) });
-    d.tickets.addInput(tidPaused, { id: 'in-p', kind: 'text', at: t(2), text: 'x' });
-    d.policy.paused = true;
-    assert.throws(() => d.tickets.wake(tidPaused, { id: 'tg', human: true, at: t(3) }),
+    // paused 拒（N5 升形：paused=构造 settings 设定——holder rebind 面·独立域）
+    const dP = buildDomain(undefined, { ...DEFAULT_SETTINGS, paused: true });
+    stores.push(dP.store);
+    const tidPaused = openTicket(dP, 'tk-paused');
+    dP.tickets.end(tidPaused, { by: 'executor', outcome: 'dropped', at: t(1) });
+    dP.tickets.addInput(tidPaused, { id: 'in-p', kind: 'text', at: t(2), text: 'x' });
+    assert.throws(() => dP.tickets.wake(tidPaused, { id: 'tg', human: true, at: t(3) }),
       (error: unknown) => error instanceof UserError && /paused/.test(error.message));
-    d.policy.paused = false;
     // revalidate 拒：admission mandate 强度降级（listedUnaddressed 缺省 explicit·mandate inferred）
     const tidRev = openTicket(d, 'tk-rev');
     d.repo.put({ ...d.repo.get(tidRev)!, mandate: mandate({ via: 'admission', strength: 'inferred', cell: 'listedUnaddressed' }) });
@@ -276,23 +276,56 @@ describe('N4 report 校验谱+wake 复活门', () => {
   });
 });
 
-describe('N4 Policy 最小门', () => {
-  it('案7·revalidate 三支谱：followup explicit 免/admission cell 强度不降/observation rulesOn·其余 via 保守拒', () => {
-    const policy = new Policy();
-    // 支①：followup explicit 免·inferred 不免
-    assert.equal(policy.revalidate(mandate({ via: 'followup', strength: 'explicit' })), true);
-    assert.equal(policy.revalidate(mandate({ via: 'followup', strength: 'inferred' })), false);
-    // 支②：admission cell 强度不降（STRENGTH 表判）
-    assert.equal(policy.revalidate(mandate({ via: 'admission', strength: 'inferred', cell: 'unlistedUnaddressed' })), true); // =表值不降
-    assert.equal(policy.revalidate(mandate({ via: 'admission', strength: 'explicit', cell: 'unlistedUnaddressed' })), true); // 升格
-    assert.equal(policy.revalidate(mandate({ via: 'admission', strength: 'inferred', cell: 'listedUnaddressed' })), false); // 降级拒
-    assert.equal(policy.revalidate(mandate({ via: 'admission', strength: 'inferred' })), false); // 缺 cell 保守拒
-    // 支③：observation→rulesOn
-    assert.equal(policy.revalidate(mandate({ via: 'bot', strength: 'inferred', observation: { mode: 'observe' }, rules: ['r-1'] })), true);
-    assert.equal(policy.revalidate(mandate({ via: 'bot', strength: 'inferred', observation: { mode: 'observe' } })), false); // rules 空
-    // 其余 via 保守拒（addressed/listed 最小门不落）
-    assert.equal(policy.revalidate(mandate({ via: 'addressed', strength: 'explicit' })), false);
-    assert.equal(policy.revalidate(mandate({ via: 'listed', strength: 'explicit' })), false);
+describe('N5 Policy 完整门族（N5 升形·门①裁②）', () => {
+  it('案7·revalidate 完整谱正形（原型 L213-240）：followup auto+rulesOn/admission cell 迁移与强度判/observation auto 支/bot 名单/listed 在册/scope 失听', () => {
+    // mode='auto'+rules=[r-1] 域（rulesOn 判据面）
+    const autoPolicy = new Policy({
+      paused: false,
+      policy: { rules: [{ id: 'r-1', name: 'R1', instruction: 'i', enabled: true }], sources: {} },
+      eval: { mode: 'auto' },
+    });
+    const offPolicy = new Policy(DEFAULT_SETTINGS); // mode='off' 缺省谱（裁①）
+    // 支①：followup——explicit 免（mode 无关）；inferred=auto+rulesOn（vacuous true·原型 L221 正形）
+    assert.equal(autoPolicy.revalidate(mandate({ via: 'followup', strength: 'explicit' })), true);
+    assert.equal(autoPolicy.revalidate(mandate({ via: 'followup', strength: 'inferred' })), true, 'N5 升形翻转：auto+rules vacuous 过（原型 L221/L219）');
+    assert.equal(offPolicy.revalidate(mandate({ via: 'followup', strength: 'inferred' })), false, 'mode=off 时 followup inferred 拒');
+    assert.equal(autoPolicy.revalidate(mandate({ via: 'followup', strength: 'inferred', rules: ['r-gone'] })), false, 'followup inferred 引失能规则拒');
+    // 支②：admission cell（sources 空=全 unlisted 谱·原型 L225-235）
+    assert.equal(autoPolicy.revalidate(mandate({ via: 'admission', strength: 'inferred', cell: 'unlistedUnaddressed' })), true); // 表值不降
+    assert.equal(autoPolicy.revalidate(mandate({ via: 'admission', strength: 'explicit', cell: 'unlistedUnaddressed' })), false, 'N5 翻转：表值降级拒（原型 L234·requesterAllowed 面存活依赖）');
+    assert.equal(autoPolicy.revalidate(mandate({ via: 'admission', strength: 'inferred', cell: 'listedUnaddressed' })), false, 'listedUnaddressed 失格（L232）');
+    assert.equal(autoPolicy.revalidate(mandate({ via: 'admission', strength: 'inferred' })), false, '缺 cell 非正规形保守拒（v2 裁·原型宽容差如实注）');
+    // 支②迁移升格（L231）：unlistedUnaddressed+现 listed→listedUnaddressed 迁移·explicit 缺省强度不降过
+    const listedPolicy = new Policy({
+      paused: false,
+      policy: { rules: [], sources: { test: { allowed: [{ id: 'person-1' }] } } },
+      eval: { mode: 'auto' },
+    });
+    assert.equal(listedPolicy.revalidate(mandate({ via: 'admission', strength: 'inferred', cell: 'unlistedUnaddressed' })), true, '迁移升格链 L231-234 过');
+    // 支③：observation——bot 名单在册+auto+rulesOn（vacuous true·原型 L238/L219 正形）
+    const botPolicy = new Policy({
+      paused: false,
+      policy: { rules: [{ id: 'r-1', name: 'R1', instruction: 'i', enabled: true }], sources: { test: { allowed: [], bots: [{ id: 'ci-bot' }] } } },
+      eval: { mode: 'auto' },
+    });
+    const botActor = { source: 'test', id: 'ci-bot' };
+    assert.equal(botPolicy.revalidate(mandate({ via: 'bot', strength: 'inferred', actor: botActor, observation: { mode: 'auto' }, rules: ['r-1'] })), true);
+    assert.equal(botPolicy.revalidate(mandate({ via: 'bot', strength: 'inferred', actor: botActor, observation: { mode: 'auto' } })), true, 'N5 翻转：rules 空 vacuous 过（原型 L219）');
+    assert.equal(botPolicy.revalidate(mandate({ via: 'bot', strength: 'inferred', actor: botActor, observation: { mode: 'observe' }, rules: ['r-1'] })), true, 'N5 升形勘正：L238 判据=settings eval.mode 非 mandate.observation.mode（observation.mode=票面标记非判据·原型正形）');
+    const botOffPolicy = new Policy({
+      paused: false,
+      policy: { rules: [{ id: 'r-1', name: 'R1', instruction: 'i', enabled: true }], sources: { test: { allowed: [], bots: [{ id: 'ci-bot' }] } } },
+      eval: { mode: 'off' },
+    });
+    assert.equal(botOffPolicy.revalidate(mandate({ via: 'bot', strength: 'inferred', actor: botActor, observation: { mode: 'auto' }, rules: ['r-1'] })), false, 'settings mode=off 拒 observation mandate（L238 mode 判据=settings eval mode）');
+    assert.equal(autoPolicy.revalidate(mandate({ via: 'bot', strength: 'inferred', observation: { mode: 'auto' }, rules: ['r-1'] })), false, 'bot 不在名单拒（L223·N4 三支无此支升形补）');
+    // 其余 via：listed/addressed 需 sender 在册（L236）
+    assert.equal(autoPolicy.revalidate(mandate({ via: 'addressed', strength: 'explicit' })), false);
+    assert.equal(autoPolicy.revalidate(mandate({ via: 'listed', strength: 'explicit' })), false);
+    assert.equal(listedPolicy.revalidate(mandate({ via: 'addressed', strength: 'explicit' })), true, 'listed sender addressed 票过（L236 反面）');
+    // scope 失听拒（L217-218·N5 升形 scope 记录面消费）
+    const deafPolicy = new Policy(DEFAULT_SETTINGS, () => ({ listened: false }));
+    assert.equal(deafPolicy.revalidate(mandate({ via: 'addressed', strength: 'explicit', scope: { row: 'r1' } })), false, 'scope 失听拒（L217-218）');
   });
 });
 

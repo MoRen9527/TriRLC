@@ -38,7 +38,7 @@
 
 import type { DatabaseSync } from 'node:sqlite';
 import { UserError } from './errors.js';
-import type { Mandate } from './policy.js';
+import type { Mandate, PolicyEffect } from './policy.js';
 import type { Effects } from './effects.js';
 import type { ReadTracker } from './read-tracker.js';
 import type { V2Store } from './store.js';
@@ -95,7 +95,7 @@ export interface TicketInputRecord {
   id: string;
   kind: TicketInputKind;
   at: string;
-  /** Variant 特有面（text/triggerId/human/context/deliveredTo——read 态面归 ReadTracker）。 */
+  /** Variant 特有面（text/triggerId/human/context/deliveredTo/policy——read 态面归 ReadTracker）。 */
   value: {
     text?: string;
     triggerId?: string;
@@ -103,6 +103,8 @@ export interface TicketInputRecord {
     context?: boolean;
     /** 最后投给的 assignment id（投递链记录·非 read 态——§七A 对照落形）。 */
     deliveredTo?: string;
+    /** policy-changed 输入携带（N5·from/to 版本对+效果面——原型 L206 输入形投影）。 */
+    policy?: { from: string; to: string; effect: PolicyEffect };
   };
 }
 
@@ -156,6 +158,14 @@ export class TicketRepo {
   openIds(): string[] {
     return (this.db.prepare("SELECT id FROM ticket WHERE json_extract(value, '$.ended') IS NULL ORDER BY rowid")
       .all() as { id: string }[]).map((row) => row.id);
+  }
+
+  /** Open 票全记录·createdAt 升序（N5 policyChanged oldest first 面·原型 L203 语义）。 */
+  openTickets(): TicketRecord[] {
+    return (this.db.prepare(
+      "SELECT value FROM ticket WHERE json_extract(value, '$.ended') IS NULL "
+      + "ORDER BY json_extract(value, '$.createdAt'), rowid",
+    ).all() as { value: string }[]).map((row) => JSON.parse(row.value) as TicketRecord);
   }
 
   /** 输入行插入（INSERT OR IGNORE=PK 天然幂等·消解原型 L235 线性扫描）。 */
@@ -303,6 +313,8 @@ export class Tickets {
     triggerId?: string;
     human?: boolean;
     context?: boolean;
+    /** policy-changed 输入携带面（N5·Tickets.policyChanged 消费）。 */
+    policy?: { from: string; to: string; effect: PolicyEffect };
   }): boolean {
     this.guardClosing();
     return this.deps.store.atomic(() => {
@@ -316,6 +328,7 @@ export class Tickets {
           ...(input.triggerId !== undefined ? { triggerId: input.triggerId } : {}),
           ...(input.human === true ? { human: true } : {}),
           ...(input.context === true ? { context: true } : {}),
+          ...(input.policy !== undefined ? { policy: input.policy } : {}),
         },
       };
       if (!this.repo.addInputRow(ticketId, record)) return false; // PK 幂等
@@ -443,6 +456,29 @@ export class Tickets {
   /** 人停（原型 stop L160-163 形=end(by='human', outcome='stopped')便捷面）。 */
   stop(ticketId: string, reason?: string, at?: string): boolean {
     return this.end(ticketId, { by: 'human', outcome: 'stopped', ...(reason !== undefined ? { reason } : {}), at });
+  }
+
+  /**
+   * Policy 变更增量通知（原型 policyChanged L200-208 正形·N5 并入）：逐 open
+   * 票 oldest first（createdAt 升序=投递按接受序）·effect 命中→addInput
+   * （kind='policy-changed'·held 让位语义自然适用——waitsForPerson 票入队不投；
+   * id 含 at：同版本对反复切换仍记新输入·原型 L205 注）。空 effects=零通知面。
+   */
+  policyChanged(from: string, to: string, effects: ReadonlyMap<string, PolicyEffect>): void {
+    this.guardClosing();
+    this.deps.store.atomic(() => {
+      const at = new Date().toISOString();
+      for (const ticket of this.repo.openTickets()) {
+        const effect = effects.get(ticket.id);
+        if (effect === undefined) continue;
+        this.addInput(ticket.id, {
+          id: `policy:${ticket.id}:${from}->${to}:${at}`,
+          kind: 'policy-changed',
+          at,
+          policy: { from, to, effect },
+        });
+      }
+    });
   }
 }
 

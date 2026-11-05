@@ -28,13 +28,23 @@
 // reply handler（判定书②附注 transport 施工定谳形）：open 注入 transport 时
 // 注册 effects.handle('reply')→deliverAndTrack（closing 检查移 handler 面=
 // deliverAndTrack 自感 closingFlag）；缺省不注册=行留库候消费（β 组合零改）。
+//
+// N5 并入（Policy 门族完整谱·设计卷 72edda33b §二·门①裁 2cfe40575）：组合序
+// 再扩：SettingsRepo→Policy（从持久 settings 构建·空行落 DEFAULT_SETTINGS
+// mode='off' 裁①）→…。applySettings=原子链：settings 写+policyEffects diff+
+// tickets.policyChanged 增量通知同事务（settings 变更与通知原子性）·事务毕
+// 换 Policy 实例（内存跟随面·失败回滚零换）。scope 注入=裁③缺省全收。
 
 import { acquireDirectoryLock, LockHeldError, type DirectoryLock } from './lock.js';
 import { V2Store } from './store.js';
 import { Effects } from './effects.js';
 import { ReadTracker } from './read-tracker.js';
 import { ReceiptsStore, type ReceiptTransport } from './receipts.js';
-import { Policy } from './policy.js';
+import {
+  Policy, SettingsRepo, policyEffects, policyVersion,
+  DEFAULT_SETTINGS, DEFAULT_SCOPE,
+  type Settings, type ScopeResolver, type PolicyEffect,
+} from './policy.js';
 import { TicketRepo, Tickets, Assignments, type ClosingFlag } from './tickets.js';
 
 export { LockHeldError };
@@ -46,7 +56,9 @@ export class Engine {
   readonly effects: Effects;
   readonly readTracker: ReadTracker;
   readonly receipts: ReceiptsStore;
-  readonly policy: Policy;
+  readonly settingsRepo: SettingsRepo;
+  /** Policy 实例（applySettings 域内换新——非 readonly 注：重建面收口本类）。 */
+  policy: Policy;
   readonly tickets: Tickets;
   readonly assignments: Assignments;
 
@@ -60,12 +72,13 @@ export class Engine {
     return this.closingFlag.closing;
   }
 
-  private constructor(store: V2Store, private readonly lock: DirectoryLock) {
+  private constructor(store: V2Store, private readonly lock: DirectoryLock, private readonly scope: ScopeResolver) {
     this.store = store;
     this.effects = new Effects(store.db); // 先建：effect 表 DDL（receipts behind 联查依赖）
     this.receipts = new ReceiptsStore(store.db, this.effects);
     this.readTracker = new ReadTracker(store.db);
-    this.policy = new Policy();
+    this.settingsRepo = new SettingsRepo(store.db);
+    this.policy = new Policy(this.settingsRepo.get() ?? DEFAULT_SETTINGS, scope);
     this.ticketRepo = new TicketRepo(store.db);
     this.tickets = new Tickets(
       { store, effects: this.effects, readTracker: this.readTracker, policy: this.policy, closingFlag: this.closingFlag },
@@ -78,8 +91,26 @@ export class Engine {
     );
   }
 
-  /** 组合根入口：锁→库→七件→（transport 注入时注册 reply handler）→start。 */
-  static open(stateDir: string, options?: { transport?: ReceiptTransport }): Engine {
+  /**
+   * N5 settings 变更原子链：settings 写+policyEffects diff+policyChanged 增量
+   * 通知同事务（settings 变更与通知原子性·通知行随事务提交/回滚）；事务毕
+   * policy.rebind 换谱（holder 形·票域 deps 引用零破——失败回滚零换谱）。
+   * 返回逐票效果 Map（调用方面·同事务内已消费）。
+   */
+  applySettings(next: Settings): Map<string, PolicyEffect> {
+    let effects!: Map<string, PolicyEffect>;
+    this.store.atomic(() => {
+      const old = this.settingsRepo.get() ?? DEFAULT_SETTINGS;
+      this.settingsRepo.put(next);
+      effects = policyEffects(this.ticketRepo.openTickets(), old, next, this.scope);
+      this.tickets.policyChanged(policyVersion(old), policyVersion(next), effects);
+    });
+    this.policy.rebind(next, this.scope);
+    return effects;
+  }
+
+  /** 组合根入口：锁→库→八件→（transport 注入时注册 reply handler）→start。 */
+  static open(stateDir: string, options?: { transport?: ReceiptTransport; scope?: ScopeResolver }): Engine {
     const lock = acquireDirectoryLock(stateDir);
     let store: V2Store;
     try {
@@ -90,7 +121,7 @@ export class Engine {
     }
     let engine: Engine;
     try {
-      engine = new Engine(store, lock);
+      engine = new Engine(store, lock, options?.scope ?? DEFAULT_SCOPE);
     } catch (error) {
       store.close();
       lock.release();
