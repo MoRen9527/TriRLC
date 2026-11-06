@@ -13,6 +13,9 @@ dist/
 build/
 coverage/
 
+# v2 Engine state (β cutover CLI · npm run v2 stateDir=package-root default)
+.trirlc-v2/
+
 # Local env
 .env
 .env.*
