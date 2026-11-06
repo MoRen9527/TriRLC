@@ -14,7 +14,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { request } from 'node:http';
+import { request, createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 
 const tmpDir = mkdtempSync(join(tmpdir(), 'trilc-pidflow-'));
 process.env.TRILC_PID_DIR = tmpDir;
@@ -31,6 +32,19 @@ after(() => {
 });
 
 // ── helpers ──
+
+// Flake fix (2026-11-06 STE): grab an ephemeral free port instead of hard-coded
+// 18731/18732 — a stale/residual listener on those ports would fail the
+// fixture's server.listen deterministically (flake family: β-2/β-3/N7 windows).
+async function freePort(): Promise<number> {
+  return new Promise((resolveFree) => {
+    const s = createServer();
+    s.listen(0, '127.0.0.1', () => {
+      const { port } = s.address() as AddressInfo;
+      s.close(() => resolveFree(port));
+    });
+  });
+}
 
 function spawnTsx(args: string[], env: Record<string, string> = {}): ChildProcess {
   return spawn(process.execPath, ['--import', 'tsx', ...args], {
@@ -79,15 +93,19 @@ function postShutdown(port: number): Promise<boolean> {
 
 describe('REQ-018 daemon PID self-registration', () => {
   it('foreground-style daemon registers PID on listen and unregisters on graceful shutdown', async () => {
-    const port = 18731;
+    const port = await freePort();
     const child = spawnTsx([FIXTURE], { TEST_PORT: String(port) });
     // Register the exit listener immediately after spawn — on Windows the
     // 'exit' event can fire while later awaits are pending, and a listener
     // attached afterwards would permanently miss it.
-    const childExit = waitExit(child, 8000);
+    // Flake fix (2026-11-06 STE): full-suite runs spawn ~7 test files
+    // concurrently; under that load tsx cold-start can exceed 10s (N7 window:
+    // suite duration 19920ms ≈ 2× waitFor timeout). Headroom 30s keeps the
+    // assertion exact (register must happen) while tolerating load windows.
+    const childExit = waitExit(child, 30000);
     const output = collectOutput(child);
 
-    const registered = await output.waitFor(/PID-REGISTERED/, 10000);
+    const registered = await output.waitFor(/PID-REGISTERED/, 30000);
     assert.equal(registered, true, `fixture did not register: ${output.get()}`);
 
     // PID file names the daemon process
@@ -105,13 +123,13 @@ describe('REQ-018 daemon PID self-registration', () => {
   });
 
   it('trilc stop stops a healthy daemon by port when the PID file is missing', async () => {
-    const port = 18732;
+    const port = await freePort();
     const child = spawnTsx([FIXTURE], { TEST_PORT: String(port) });
     // Exit listener registered immediately after spawn (see note above).
-    const childExit = waitExit(child, 8000);
+    const childExit = waitExit(child, 30000);
     const output = collectOutput(child);
 
-    const registered = await output.waitFor(/PID-REGISTERED/, 10000);
+    const registered = await output.waitFor(/PID-REGISTERED/, 30000);
     assert.equal(registered, true, `fixture did not register: ${output.get()}`);
 
     // Simulate pre-REQ-018 state: daemon running but no PID record
@@ -121,7 +139,9 @@ describe('REQ-018 daemon PID self-registration', () => {
     // Real CLI: stop --port must locate the daemon via netstat/lsof
     const cli = spawnTsx([CLI, 'stop', '--port', String(port)]);
     const cliOut = collectOutput(cli);
-    const cliCode = await waitExit(cli, 15000);
+    // Flake fix (2026-11-06 STE): stop chain = netstat port scan + shutdown
+    // round-trip; under suite-concurrency load this can exceed 15s. 60s headroom.
+    const cliCode = await waitExit(cli, 60000);
     assert.equal(cliCode, 0, `trilc stop exited ${cliCode} (out: ${cliOut.get()})`);
     assert.match(cliOut.get(), /stopped via port lookup/, `stop message: ${cliOut.get()}`);
 

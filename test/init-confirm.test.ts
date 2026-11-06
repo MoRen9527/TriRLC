@@ -118,7 +118,12 @@ function buildDeps(git: GitRunner, trimcBaseUrl: string, overrides?: object): Pa
     nodeId: 'test-node',
     tricompanySourcePath: path.join(tmpRoot, 'TriCompany'),
     git,
-    timeoutMs: 500,
+    // Flake fix (2026-11-06 STE): 500ms aborted the status-stub fetch under
+    // full-suite concurrency load (β-3 window: 3 fails solo-green ×3) —
+    // fetchRemoteSyncStatus → AbortSignal.timeout(deps.timeoutMs). Loopback
+    // stub responds in <50ms normally; 2000ms tolerates load windows while
+    // real degraded-path assertions stay intact.
+    timeoutMs: 2000,
     ...overrides,
   };
 }
