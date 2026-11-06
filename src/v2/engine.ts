@@ -41,6 +41,13 @@
 // SeatRepo→Seats（engine.seats 公开·list=列席面/resolve=点名解析·N8 send
 // 消费面）。address 零拨号（本件只存不连）·status 静态裁⑧·name 值域=
 // source-agents 正名 kebab-case 裁⑦。
+//
+// N7 并入（Passes 调度环+status 联动·设计卷 ec79feb7d §二·门①裁 c8544a1e7）：
+// 组合序再扩：seatRepo 共享实例（Seats 与票域联动 deps 同库同表无状态）→
+// 票域 deps 注入 seats 面（可选 Pick·started→busy/end→idle 事务内同写·
+// actor.id 席名命中才联动·全字段写裁量注①）→Passes 组合（health holder
+// 注入形·closing 收口 closingFlag·组合方显式 start=engine 不自动起·
+// evaluateDue 留位 noop 嫁接域锚裁③）。
 
 import { acquireDirectoryLock, LockHeldError, type DirectoryLock } from './lock.js';
 import { V2Store } from './store.js';
@@ -54,6 +61,7 @@ import {
 } from './policy.js';
 import { TicketRepo, Tickets, Assignments, type ClosingFlag } from './tickets.js';
 import { Seats, SeatRepo, seedSeats } from './seats.js';
+import { Passes, type PassesHealthEntry } from './passes.js';
 
 export { LockHeldError };
 export type { DirectoryLock };
@@ -69,6 +77,10 @@ export class Engine {
   policy: Policy;
   /** N6 Seats registry（第六 Pick·组合序：seedSeats 幂等灌→Seats 公开）。 */
   readonly seats: Seats;
+  /** N6/N7 seat 表仓储（Seats 与票域 status 联动 deps 共享实例·无状态）。 */
+  readonly seatRepo: SeatRepo;
+  /** N7 Passes 调度环（泵本体·组合方显式 start——engine 不自动起）。 */
+  readonly passes: Passes;
   readonly tickets: Tickets;
   readonly assignments: Assignments;
 
@@ -90,17 +102,34 @@ export class Engine {
     this.settingsRepo = new SettingsRepo(store.db);
     this.policy = new Policy(this.settingsRepo.get() ?? DEFAULT_SETTINGS, scope);
     seedSeats(store.db);
-    this.seats = new Seats(new SeatRepo(store.db));
+    this.seatRepo = new SeatRepo(store.db);
+    this.seats = new Seats(this.seatRepo);
     this.ticketRepo = new TicketRepo(store.db);
     this.tickets = new Tickets(
-      { store, effects: this.effects, readTracker: this.readTracker, policy: this.policy, closingFlag: this.closingFlag },
+      { store, effects: this.effects, readTracker: this.readTracker, policy: this.policy, closingFlag: this.closingFlag, seats: this.seatRepo },
       this.ticketRepo,
     );
     this.assignments = new Assignments(
-      { store, effects: this.effects, readTracker: this.readTracker, policy: this.policy, closingFlag: this.closingFlag },
+      { store, effects: this.effects, readTracker: this.readTracker, policy: this.policy, closingFlag: this.closingFlag, seats: this.seatRepo },
       this.ticketRepo,
       this.tickets,
     );
+    this.passes = new Passes({
+      effects: this.effects,
+      health: {
+        get: () => this.passesHealthStore.entry,
+        set: (entry) => { this.passesHealthStore.entry = entry; },
+      },
+      closing: () => this.closingFlag.closing,
+    });
+  }
+
+  /** N7 Passes health holder（轻量注入形·零引现役 HealthBoard）。 */
+  private readonly passesHealthStore: { entry?: PassesHealthEntry } = {};
+
+  /** Passes health 读面（N8 status 视图消费位）。 */
+  passesHealth(): PassesHealthEntry | undefined {
+    return this.passesHealthStore.entry;
   }
 
   /**

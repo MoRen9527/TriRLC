@@ -118,6 +118,22 @@ export interface TicketDomainDeps {
   readTracker: Pick<ReadTracker, 'markDelivered' | 'ack' | 'settle' | 'stateOf'>;
   policy: PolicyLike;
   closingFlag: ClosingFlag;
+  /** N7 status 联动面（裁⑧收口·可选注入——缺省 undefined=零联动 N4 组合零改）。 */
+  seats?: Pick<import('./seats.js').SeatRepo, 'get' | 'put'>;
+}
+
+/**
+ * N7 status 联动（门①裁④+裁量注①·设计卷 ec79feb7d §二.2）：票 mandate.actor.id
+ * 经 seats.get 命中席名→全字段写翻转 status（get 回读展开 `{...seat, status}` put
+ * 经 validateSeat 门·禁部分字段写）；非席名/零 deps/同态幂等零写。调用方在
+ * atomic 事务内调（联动写与票写同事务原子）。
+ */
+function touchSeat(deps: TicketDomainDeps, ticket: TicketRecord, status: 'busy' | 'idle'): void {
+  const seats = deps.seats;
+  if (seats === undefined) return;
+  const seat = seats.get(ticket.mandate.actor.id);
+  if (seat === undefined || seat.status === status) return;
+  seats.put({ ...seat, status });
 }
 
 /** Policy 消费面（wake paused/revalidate 门——policy.ts Policy 结构子集）。 */
@@ -371,6 +387,7 @@ export class Tickets {
       }
       ticket.ended = { at, by: input.by, outcome: input.outcome, ...(input.reason !== undefined ? { reason: input.reason } : {}) };
       ticket.undelivered = [];
+      touchSeat(this.deps, ticket, 'idle'); // N7 status 联动（裁⑧·事务内同写）
       for (const assignment of ticket.assignments) {
         if (assignment.state !== 'ended') {
           assignment.state = 'ended';
@@ -529,6 +546,7 @@ export class Assignments {
       }
       ticket.updatedAt = now;
       this.repo.put(ticket);
+      touchSeat(this.deps, ticket, 'busy'); // N7 status 联动（裁⑧·事务内同写）
       this.emit('assignment.started', ticketId, { assignmentId });
     });
   }
